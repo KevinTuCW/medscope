@@ -1,0 +1,1602 @@
+[
+  {
+    "seed": 0,
+    "report_text_before": "Lungs are clear without focal consolidation. No pleural effusion or pneumothorax. Heart size is normal.",
+    "report_text_after": "姓名：Smith, Michael入院复查。 住院号mrn7007071. 日期1952／10／26. ID: 11010119790224075X. Lungs are clear without focal consolidation. 就诊于上海惠民医院的既往检查已复核。 No pleural effusion or pneumothorax. Heart size is normal. 医生：伊丽莎白・威尔逊入院复查。 联系电话303－562－8113.",
+    "dicom_attributes": {
+      "PatientName": "BROWN^JOHN",
+      "PatientID": "MRN5343902",
+      "PatientBirthDate": "20050813",
+      "AccessionNumber": "ACC50709944",
+      "InstitutionName": "天河区中心医院",
+      "ReferringPhysicianName": "YANG^MING"
+    },
+    "ground_truth": [
+      {
+        "kind": "patient_name",
+        "value": "BROWN^JOHN",
+        "location": "PatientName"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN5343902",
+        "location": "PatientID"
+      },
+      {
+        "kind": "birth_date",
+        "value": "20050813",
+        "location": "PatientBirthDate"
+      },
+      {
+        "kind": "accession",
+        "value": "ACC50709944",
+        "location": "AccessionNumber"
+      },
+      {
+        "kind": "institution",
+        "value": "天河区中心医院",
+        "location": "InstitutionName"
+      },
+      {
+        "kind": "physician_name",
+        "value": "YANG^MING",
+        "location": "ReferringPhysicianName"
+      },
+      {
+        "kind": "patient_name",
+        "value": "Smith, Michael",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "patient_id",
+        "value": "mrn7007071",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "birth_date",
+        "value": "1952／10／26",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "national_id",
+        "value": "11010119790224075X",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "institution",
+        "value": "上海惠民医院",
+        "location": "report:comparison_sentence"
+      },
+      {
+        "kind": "physician_name",
+        "value": "伊丽莎白・威尔逊",
+        "location": "report:physician_sentence"
+      },
+      {
+        "kind": "phone",
+        "value": "303－562－8113",
+        "location": "report:physician_sentence"
+      }
+    ]
+  },
+  {
+    "seed": 1,
+    "report_text_before": "There is a 2.5 cm nodule in the right upper lobe. No cardiomegaly. Osseous structures are intact.",
+    "report_text_after": "患者：周涛情况良好，建议随访。 Medical Record Number: 8922960. 出生日期19520801. ID: 110101199510257850. There is a 2.5 cm nodule in the right upper lobe. Comparison exam performed at 天河区中心医院 was reviewed. No cardiomegaly. Osseous structures are intact. 医生：Wilson, Mary情况良好，建议随访。 Contact: 434．805．2674.",
+    "dicom_attributes": {
+      "PatientName": "WANG^LEI",
+      "PatientID": "MRN2978347",
+      "PatientBirthDate": "20030816",
+      "AccessionNumber": "ACC97455328",
+      "InstitutionName": "广州协和诊所",
+      "ReferringPhysicianName": "MILLER^MARY"
+    },
+    "ground_truth": [
+      {
+        "kind": "patient_name",
+        "value": "WANG^LEI",
+        "location": "PatientName"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN2978347",
+        "location": "PatientID"
+      },
+      {
+        "kind": "birth_date",
+        "value": "20030816",
+        "location": "PatientBirthDate"
+      },
+      {
+        "kind": "accession",
+        "value": "ACC97455328",
+        "location": "AccessionNumber"
+      },
+      {
+        "kind": "institution",
+        "value": "广州协和诊所",
+        "location": "InstitutionName"
+      },
+      {
+        "kind": "physician_name",
+        "value": "MILLER^MARY",
+        "location": "ReferringPhysicianName"
+      },
+      {
+        "kind": "patient_name",
+        "value": "周涛",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "patient_id",
+        "value": "8922960",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "birth_date",
+        "value": "19520801",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "national_id",
+        "value": "110101199510257850",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "institution",
+        "value": "天河区中心医院",
+        "location": "report:comparison_sentence"
+      },
+      {
+        "kind": "physician_name",
+        "value": "Wilson, Mary",
+        "location": "report:physician_sentence"
+      },
+      {
+        "kind": "phone",
+        "value": "434．805．2674",
+        "location": "report:physician_sentence"
+      }
+    ]
+  },
+  {
+    "seed": 2,
+    "report_text_before": "Cardiomegaly without lung infiltrates. Mild tortuosity of the aorta noted.",
+    "report_text_after": "Patient: 王芳. MRN5220867. DOB: 1995年11月13日. ID: 110101198709155144. Cardiomegaly without lung infiltrates. Comparison exam performed at Riverside Memorial Hospital was reviewed. Mild tortuosity of the aorta noted. Dr. Linda・Garcia. Contact: 86.166.6940.8613.",
+    "dicom_attributes": {
+      "PatientName": "WANG^WEI",
+      "PatientID": "MRN7057539",
+      "PatientBirthDate": "19611226",
+      "AccessionNumber": "ACC99889692",
+      "InstitutionName": "北京仁和医院",
+      "ReferringPhysicianName": "DAVIS^PATRICIA"
+    },
+    "ground_truth": [
+      {
+        "kind": "patient_name",
+        "value": "WANG^WEI",
+        "location": "PatientName"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN7057539",
+        "location": "PatientID"
+      },
+      {
+        "kind": "birth_date",
+        "value": "19611226",
+        "location": "PatientBirthDate"
+      },
+      {
+        "kind": "accession",
+        "value": "ACC99889692",
+        "location": "AccessionNumber"
+      },
+      {
+        "kind": "institution",
+        "value": "北京仁和医院",
+        "location": "InstitutionName"
+      },
+      {
+        "kind": "physician_name",
+        "value": "DAVIS^PATRICIA",
+        "location": "ReferringPhysicianName"
+      },
+      {
+        "kind": "patient_name",
+        "value": "王芳",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN5220867",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "birth_date",
+        "value": "1995年11月13日",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "national_id",
+        "value": "110101198709155144",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "institution",
+        "value": "Riverside Memorial Hospital",
+        "location": "report:comparison_sentence"
+      },
+      {
+        "kind": "physician_name",
+        "value": "Linda・Garcia",
+        "location": "report:physician_sentence"
+      },
+      {
+        "kind": "phone",
+        "value": "86.166.6940.8613",
+        "location": "report:physician_sentence"
+      }
+    ]
+  },
+  {
+    "seed": 3,
+    "report_text_before": "右侧胸腔积液，左肺纹理清晰。心影大小正常。未见气胸征象。",
+    "report_text_after": "患者：李文博，详见下列记录。 Medical Record Number: 8872412. DOB: 1964年12月16日. ID: 110101200007218812. 右侧胸腔积液，左肺纹理清晰。心影大小正常。未见气胸征象。 来自Cedar Valley Clinic的既往检查已复核。 医师：Barbara·Johnson，详见下列记录。 Contact: (735)-599-1248.",
+    "dicom_attributes": {
+      "PatientName": "LI^JUAN",
+      "PatientID": "MRN8953298",
+      "PatientBirthDate": "19481001",
+      "AccessionNumber": "ACC72979298",
+      "InstitutionName": "北京仁和医院",
+      "ReferringPhysicianName": "MILLER^PATRICIA"
+    },
+    "ground_truth": [
+      {
+        "kind": "patient_name",
+        "value": "LI^JUAN",
+        "location": "PatientName"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN8953298",
+        "location": "PatientID"
+      },
+      {
+        "kind": "birth_date",
+        "value": "19481001",
+        "location": "PatientBirthDate"
+      },
+      {
+        "kind": "accession",
+        "value": "ACC72979298",
+        "location": "AccessionNumber"
+      },
+      {
+        "kind": "institution",
+        "value": "北京仁和医院",
+        "location": "InstitutionName"
+      },
+      {
+        "kind": "physician_name",
+        "value": "MILLER^PATRICIA",
+        "location": "ReferringPhysicianName"
+      },
+      {
+        "kind": "patient_name",
+        "value": "李文博",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "patient_id",
+        "value": "8872412",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "birth_date",
+        "value": "1964年12月16日",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "national_id",
+        "value": "110101200007218812",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "institution",
+        "value": "Cedar Valley Clinic",
+        "location": "report:comparison_sentence"
+      },
+      {
+        "kind": "physician_name",
+        "value": "Barbara·Johnson",
+        "location": "report:physician_sentence"
+      },
+      {
+        "kind": "phone",
+        "value": "(735)-599-1248",
+        "location": "report:physician_sentence"
+      }
+    ]
+  },
+  {
+    "seed": 4,
+    "report_text_before": "双肺纹理增粗，未见明确实变影。心影不大。膈肌光滑。",
+    "report_text_after": "患者：陈伟，详见下列记录。 MRN2511631档. 日期1947年4月17日. 身份证110101198605251761. 双肺纹理增粗，未见明确实变影。心影不大。膈肌光滑。 Comparison exam performed at 北京仁和医院 was reviewed. Dr. Michael Wilson. 手机008616327005076.",
+    "dicom_attributes": {
+      "PatientName": "CHEN^WEI",
+      "PatientID": "MRN7644754",
+      "PatientBirthDate": "20010303",
+      "AccessionNumber": "ACC18927505",
+      "InstitutionName": "Riverside Memorial Hospital",
+      "ReferringPhysicianName": "BROWN^ROBERT"
+    },
+    "ground_truth": [
+      {
+        "kind": "patient_name",
+        "value": "CHEN^WEI",
+        "location": "PatientName"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN7644754",
+        "location": "PatientID"
+      },
+      {
+        "kind": "birth_date",
+        "value": "20010303",
+        "location": "PatientBirthDate"
+      },
+      {
+        "kind": "accession",
+        "value": "ACC18927505",
+        "location": "AccessionNumber"
+      },
+      {
+        "kind": "institution",
+        "value": "Riverside Memorial Hospital",
+        "location": "InstitutionName"
+      },
+      {
+        "kind": "physician_name",
+        "value": "BROWN^ROBERT",
+        "location": "ReferringPhysicianName"
+      },
+      {
+        "kind": "patient_name",
+        "value": "陈伟",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN2511631",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "birth_date",
+        "value": "1947年4月17日",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "national_id",
+        "value": "110101198605251761",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "institution",
+        "value": "北京仁和医院",
+        "location": "report:comparison_sentence"
+      },
+      {
+        "kind": "physician_name",
+        "value": "Michael Wilson",
+        "location": "report:physician_sentence"
+      },
+      {
+        "kind": "phone",
+        "value": "008616327005076",
+        "location": "report:physician_sentence"
+      }
+    ]
+  },
+  {
+    "seed": 5,
+    "report_text_before": "Mild interstitial edema versus atypical infectious process. No acute cardiopulmonary process.",
+    "report_text_after": "Patient: Smith, Linda. Mrn3631528号. DOB: 1988年9月4日. ID: 110101197101242216. Mild interstitial edema versus atypical infectious process. Comparison exam performed at 北京仁和医院 was reviewed. No acute cardiopulmonary process. Dr. 李明. Contact: +86 132 7288 2075.",
+    "dicom_attributes": {
+      "PatientName": "WALKER^JOHN",
+      "PatientID": "MRN8811851",
+      "PatientBirthDate": "19711102",
+      "AccessionNumber": "ACC31052228",
+      "InstitutionName": "Lakeside General Hospital",
+      "ReferringPhysicianName": "YANG^YAN"
+    },
+    "ground_truth": [
+      {
+        "kind": "patient_name",
+        "value": "WALKER^JOHN",
+        "location": "PatientName"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN8811851",
+        "location": "PatientID"
+      },
+      {
+        "kind": "birth_date",
+        "value": "19711102",
+        "location": "PatientBirthDate"
+      },
+      {
+        "kind": "accession",
+        "value": "ACC31052228",
+        "location": "AccessionNumber"
+      },
+      {
+        "kind": "institution",
+        "value": "Lakeside General Hospital",
+        "location": "InstitutionName"
+      },
+      {
+        "kind": "physician_name",
+        "value": "YANG^YAN",
+        "location": "ReferringPhysicianName"
+      },
+      {
+        "kind": "patient_name",
+        "value": "Smith, Linda",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "patient_id",
+        "value": "Mrn3631528",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "birth_date",
+        "value": "1988年9月4日",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "national_id",
+        "value": "110101197101242216",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "institution",
+        "value": "北京仁和医院",
+        "location": "report:comparison_sentence"
+      },
+      {
+        "kind": "physician_name",
+        "value": "李明",
+        "location": "report:physician_sentence"
+      },
+      {
+        "kind": "phone",
+        "value": "+86 132 7288 2075",
+        "location": "report:physician_sentence"
+      }
+    ]
+  },
+  {
+    "seed": 6,
+    "report_text_before": "The mediastinal contour is within normal limits. No visible pneumothorax or pleural fluid.",
+    "report_text_after": "姓名：玛丽・居里情况良好，建议随访。 Mrn6358402号. 出生日期09/18/1992. ID: 110101195107110955. The mediastinal contour is within normal limits. Comparison exam performed at 广州协和诊所 was reviewed. No visible pneumothorax or pleural fluid. Dr. James・Wilson. Contact: 916 296 4230.",
+    "dicom_attributes": {
+      "PatientName": "HUANG^LEI",
+      "PatientID": "MRN1617783",
+      "PatientBirthDate": "19400322",
+      "AccessionNumber": "ACC88716606",
+      "InstitutionName": "天河区中心医院",
+      "ReferringPhysicianName": "WALKER^LINDA"
+    },
+    "ground_truth": [
+      {
+        "kind": "patient_name",
+        "value": "HUANG^LEI",
+        "location": "PatientName"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN1617783",
+        "location": "PatientID"
+      },
+      {
+        "kind": "birth_date",
+        "value": "19400322",
+        "location": "PatientBirthDate"
+      },
+      {
+        "kind": "accession",
+        "value": "ACC88716606",
+        "location": "AccessionNumber"
+      },
+      {
+        "kind": "institution",
+        "value": "天河区中心医院",
+        "location": "InstitutionName"
+      },
+      {
+        "kind": "physician_name",
+        "value": "WALKER^LINDA",
+        "location": "ReferringPhysicianName"
+      },
+      {
+        "kind": "patient_name",
+        "value": "玛丽・居里",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "patient_id",
+        "value": "Mrn6358402",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "birth_date",
+        "value": "09/18/1992",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "national_id",
+        "value": "110101195107110955",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "institution",
+        "value": "广州协和诊所",
+        "location": "report:comparison_sentence"
+      },
+      {
+        "kind": "physician_name",
+        "value": "James・Wilson",
+        "location": "report:physician_sentence"
+      },
+      {
+        "kind": "phone",
+        "value": "916 296 4230",
+        "location": "report:physician_sentence"
+      }
+    ]
+  },
+  {
+    "seed": 7,
+    "report_text_before": "1. Cardiomegaly. 2. Tortuous aorta. Otherwise unremarkable chest radiograph.",
+    "report_text_after": "患者：James·Brown情况良好，建议随访。 MRN: 2579240. 出生日期04－02－2004. ID: 110101194804035646. 1. Cardiomegaly. Comparison exam performed at Riverside Memorial Hospital was reviewed. 2. Tortuous aorta. Otherwise unremarkable chest radiograph. 医生：诸葛亮华，详见下列记录。 Contact: (428) 845-2013.",
+    "dicom_attributes": {
+      "PatientName": "GARCIA^MICHAEL",
+      "PatientID": "MRN1810111",
+      "PatientBirthDate": "19490904",
+      "AccessionNumber": "ACC59081935",
+      "InstitutionName": "Riverside Memorial Hospital",
+      "ReferringPhysicianName": "LIU^SAN"
+    },
+    "ground_truth": [
+      {
+        "kind": "patient_name",
+        "value": "GARCIA^MICHAEL",
+        "location": "PatientName"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN1810111",
+        "location": "PatientID"
+      },
+      {
+        "kind": "birth_date",
+        "value": "19490904",
+        "location": "PatientBirthDate"
+      },
+      {
+        "kind": "accession",
+        "value": "ACC59081935",
+        "location": "AccessionNumber"
+      },
+      {
+        "kind": "institution",
+        "value": "Riverside Memorial Hospital",
+        "location": "InstitutionName"
+      },
+      {
+        "kind": "physician_name",
+        "value": "LIU^SAN",
+        "location": "ReferringPhysicianName"
+      },
+      {
+        "kind": "patient_name",
+        "value": "James·Brown",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "patient_id",
+        "value": "2579240",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "birth_date",
+        "value": "04－02－2004",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "national_id",
+        "value": "110101194804035646",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "institution",
+        "value": "Riverside Memorial Hospital",
+        "location": "report:comparison_sentence"
+      },
+      {
+        "kind": "physician_name",
+        "value": "诸葛亮华",
+        "location": "report:physician_sentence"
+      },
+      {
+        "kind": "phone",
+        "value": "(428) 845-2013",
+        "location": "report:physician_sentence"
+      }
+    ]
+  },
+  {
+    "seed": 8,
+    "report_text_before": "Lungs are clear without focal consolidation. No pleural effusion or pneumothorax. Heart size is normal.",
+    "report_text_after": "Patient: 陈家豪. mrn2429171. 日期19911101. 身份证号110101200208135069. Lungs are clear without focal consolidation. Comparison exam performed at Cedar Valley Clinic was reviewed. No pleural effusion or pneumothorax. Heart size is normal. 医师：James·Miller入院复查。 手机696-439-1327.",
+    "dicom_attributes": {
+      "PatientName": "YANG^QIANG",
+      "PatientID": "MRN3119480",
+      "PatientBirthDate": "19641202",
+      "AccessionNumber": "ACC21433373",
+      "InstitutionName": "St. Augustine Medical Center",
+      "ReferringPhysicianName": "MILLER^PATRICIA"
+    },
+    "ground_truth": [
+      {
+        "kind": "patient_name",
+        "value": "YANG^QIANG",
+        "location": "PatientName"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN3119480",
+        "location": "PatientID"
+      },
+      {
+        "kind": "birth_date",
+        "value": "19641202",
+        "location": "PatientBirthDate"
+      },
+      {
+        "kind": "accession",
+        "value": "ACC21433373",
+        "location": "AccessionNumber"
+      },
+      {
+        "kind": "institution",
+        "value": "St. Augustine Medical Center",
+        "location": "InstitutionName"
+      },
+      {
+        "kind": "physician_name",
+        "value": "MILLER^PATRICIA",
+        "location": "ReferringPhysicianName"
+      },
+      {
+        "kind": "patient_name",
+        "value": "陈家豪",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "patient_id",
+        "value": "mrn2429171",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "birth_date",
+        "value": "19911101",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "national_id",
+        "value": "110101200208135069",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "institution",
+        "value": "Cedar Valley Clinic",
+        "location": "report:comparison_sentence"
+      },
+      {
+        "kind": "physician_name",
+        "value": "James·Miller",
+        "location": "report:physician_sentence"
+      },
+      {
+        "kind": "phone",
+        "value": "696-439-1327",
+        "location": "report:physician_sentence"
+      }
+    ]
+  },
+  {
+    "seed": 9,
+    "report_text_before": "There is a 2.5 cm nodule in the right upper lobe. No cardiomegaly. Osseous structures are intact.",
+    "report_text_after": "患者：Linda Davis，详见下列记录。 MRN: 6676160. DOB: 09．20．1982. 证件号110101196112159746. There is a 2.5 cm nodule in the right upper lobe. 就诊于St. Augustine Medical Center的既往检查已复核。 No cardiomegaly. Osseous structures are intact. 医生：张三既往体健，无特殊病史。 Contact: 132-8294-9673.",
+    "dicom_attributes": {
+      "PatientName": "WALKER^ROBERT",
+      "PatientID": "MRN3324305",
+      "PatientBirthDate": "19631101",
+      "AccessionNumber": "ACC55409281",
+      "InstitutionName": "天河区中心医院",
+      "ReferringPhysicianName": "WANG^JUAN"
+    },
+    "ground_truth": [
+      {
+        "kind": "patient_name",
+        "value": "WALKER^ROBERT",
+        "location": "PatientName"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN3324305",
+        "location": "PatientID"
+      },
+      {
+        "kind": "birth_date",
+        "value": "19631101",
+        "location": "PatientBirthDate"
+      },
+      {
+        "kind": "accession",
+        "value": "ACC55409281",
+        "location": "AccessionNumber"
+      },
+      {
+        "kind": "institution",
+        "value": "天河区中心医院",
+        "location": "InstitutionName"
+      },
+      {
+        "kind": "physician_name",
+        "value": "WANG^JUAN",
+        "location": "ReferringPhysicianName"
+      },
+      {
+        "kind": "patient_name",
+        "value": "Linda Davis",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "patient_id",
+        "value": "6676160",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "birth_date",
+        "value": "09．20．1982",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "national_id",
+        "value": "110101196112159746",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "institution",
+        "value": "St. Augustine Medical Center",
+        "location": "report:comparison_sentence"
+      },
+      {
+        "kind": "physician_name",
+        "value": "张三",
+        "location": "report:physician_sentence"
+      },
+      {
+        "kind": "phone",
+        "value": "132-8294-9673",
+        "location": "report:physician_sentence"
+      }
+    ]
+  },
+  {
+    "seed": 10,
+    "report_text_before": "Cardiomegaly without lung infiltrates. Mild tortuosity of the aorta noted.",
+    "report_text_after": "患者：玛丽・史密斯，详见下列记录。 住院号No.3688205. DOB: 1971－12－12. 身份证11010119850714290X. Cardiomegaly without lung infiltrates. Comparison exam performed at 北京仁和医院 was reviewed. Mild tortuosity of the aorta noted. 医生：Wilson, Barbara入院复查。 手机902-510-6940.",
+    "dicom_attributes": {
+      "PatientName": "ZHAO^YAN",
+      "PatientID": "MRN1248847",
+      "PatientBirthDate": "19660827",
+      "AccessionNumber": "ACC75940689",
+      "InstitutionName": "北京仁和医院",
+      "ReferringPhysicianName": "GARCIA^JOHN"
+    },
+    "ground_truth": [
+      {
+        "kind": "patient_name",
+        "value": "ZHAO^YAN",
+        "location": "PatientName"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN1248847",
+        "location": "PatientID"
+      },
+      {
+        "kind": "birth_date",
+        "value": "19660827",
+        "location": "PatientBirthDate"
+      },
+      {
+        "kind": "accession",
+        "value": "ACC75940689",
+        "location": "AccessionNumber"
+      },
+      {
+        "kind": "institution",
+        "value": "北京仁和医院",
+        "location": "InstitutionName"
+      },
+      {
+        "kind": "physician_name",
+        "value": "GARCIA^JOHN",
+        "location": "ReferringPhysicianName"
+      },
+      {
+        "kind": "patient_name",
+        "value": "玛丽・史密斯",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "patient_id",
+        "value": "No.3688205",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "birth_date",
+        "value": "1971－12－12",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "national_id",
+        "value": "11010119850714290X",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "institution",
+        "value": "北京仁和医院",
+        "location": "report:comparison_sentence"
+      },
+      {
+        "kind": "physician_name",
+        "value": "Wilson, Barbara",
+        "location": "report:physician_sentence"
+      },
+      {
+        "kind": "phone",
+        "value": "902-510-6940",
+        "location": "report:physician_sentence"
+      }
+    ]
+  },
+  {
+    "seed": 11,
+    "report_text_before": "右侧胸腔积液，左肺纹理清晰。心影大小正常。未见气胸征象。",
+    "report_text_after": "患者：Barbara·Wilson情况良好，建议随访。 MRN8981982档. DOB: 02／18／1958. ID: 11010119971124630X. 右侧胸腔积液，左肺纹理清晰。心影大小正常。未见气胸征象。 Comparison exam performed at St. Augustine Medical Center was reviewed. 医师：上官婉儿，详见下列记录。 Contact: (741) 264-1975.",
+    "dicom_attributes": {
+      "PatientName": "WILSON^BARBARA",
+      "PatientID": "MRN9520162",
+      "PatientBirthDate": "19640326",
+      "AccessionNumber": "ACC78707214",
+      "InstitutionName": "天河区中心医院",
+      "ReferringPhysicianName": "LI^WEI"
+    },
+    "ground_truth": [
+      {
+        "kind": "patient_name",
+        "value": "WILSON^BARBARA",
+        "location": "PatientName"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN9520162",
+        "location": "PatientID"
+      },
+      {
+        "kind": "birth_date",
+        "value": "19640326",
+        "location": "PatientBirthDate"
+      },
+      {
+        "kind": "accession",
+        "value": "ACC78707214",
+        "location": "AccessionNumber"
+      },
+      {
+        "kind": "institution",
+        "value": "天河区中心医院",
+        "location": "InstitutionName"
+      },
+      {
+        "kind": "physician_name",
+        "value": "LI^WEI",
+        "location": "ReferringPhysicianName"
+      },
+      {
+        "kind": "patient_name",
+        "value": "Barbara·Wilson",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN8981982",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "birth_date",
+        "value": "02／18／1958",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "national_id",
+        "value": "11010119971124630X",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "institution",
+        "value": "St. Augustine Medical Center",
+        "location": "report:comparison_sentence"
+      },
+      {
+        "kind": "physician_name",
+        "value": "上官婉儿",
+        "location": "report:physician_sentence"
+      },
+      {
+        "kind": "phone",
+        "value": "(741) 264-1975",
+        "location": "report:physician_sentence"
+      }
+    ]
+  },
+  {
+    "seed": 12,
+    "report_text_before": "双肺纹理增粗，未见明确实变影。心影不大。膈肌光滑。",
+    "report_text_after": "Patient: Robert Walker. Medical Record Number: 5597764. DOB: 11－20－1940. ID: 110101196006070609. 双肺纹理增粗，未见明确实变影。心影不大。膈肌光滑。 就诊于Cedar Valley Clinic的既往检查已复核。 医师：伊丽莎白·威尔逊入院复查。 联系电话0086－171－0304－0995.",
+    "dicom_attributes": {
+      "PatientName": "DAVIS^LINDA",
+      "PatientID": "MRN3392436",
+      "PatientBirthDate": "19880112",
+      "AccessionNumber": "ACC74765263",
+      "InstitutionName": "北京仁和医院",
+      "ReferringPhysicianName": "HUANG^MING"
+    },
+    "ground_truth": [
+      {
+        "kind": "patient_name",
+        "value": "DAVIS^LINDA",
+        "location": "PatientName"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN3392436",
+        "location": "PatientID"
+      },
+      {
+        "kind": "birth_date",
+        "value": "19880112",
+        "location": "PatientBirthDate"
+      },
+      {
+        "kind": "accession",
+        "value": "ACC74765263",
+        "location": "AccessionNumber"
+      },
+      {
+        "kind": "institution",
+        "value": "北京仁和医院",
+        "location": "InstitutionName"
+      },
+      {
+        "kind": "physician_name",
+        "value": "HUANG^MING",
+        "location": "ReferringPhysicianName"
+      },
+      {
+        "kind": "patient_name",
+        "value": "Robert Walker",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "patient_id",
+        "value": "5597764",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "birth_date",
+        "value": "11－20－1940",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "national_id",
+        "value": "110101196006070609",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "institution",
+        "value": "Cedar Valley Clinic",
+        "location": "report:comparison_sentence"
+      },
+      {
+        "kind": "physician_name",
+        "value": "伊丽莎白·威尔逊",
+        "location": "report:physician_sentence"
+      },
+      {
+        "kind": "phone",
+        "value": "0086－171－0304－0995",
+        "location": "report:physician_sentence"
+      }
+    ]
+  },
+  {
+    "seed": 13,
+    "report_text_before": "Mild interstitial edema versus atypical infectious process. No acute cardiopulmonary process.",
+    "report_text_after": "姓名：Robert·Garcia，详见下列记录。 MRN4143616. DOB: 1977．01．14. 证件号110101197503038924. Mild interstitial edema versus atypical infectious process. Comparison exam performed at 天河区中心医院 was reviewed. No acute cardiopulmonary process. 医师：黄燕既往体健，无特殊病史。 手机(342) 462-6828.",
+    "dicom_attributes": {
+      "PatientName": "DAVIS^JAMES",
+      "PatientID": "MRN4868131",
+      "PatientBirthDate": "19580421",
+      "AccessionNumber": "ACC35148935",
+      "InstitutionName": "St. Augustine Medical Center",
+      "ReferringPhysicianName": "WANG^MING"
+    },
+    "ground_truth": [
+      {
+        "kind": "patient_name",
+        "value": "DAVIS^JAMES",
+        "location": "PatientName"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN4868131",
+        "location": "PatientID"
+      },
+      {
+        "kind": "birth_date",
+        "value": "19580421",
+        "location": "PatientBirthDate"
+      },
+      {
+        "kind": "accession",
+        "value": "ACC35148935",
+        "location": "AccessionNumber"
+      },
+      {
+        "kind": "institution",
+        "value": "St. Augustine Medical Center",
+        "location": "InstitutionName"
+      },
+      {
+        "kind": "physician_name",
+        "value": "WANG^MING",
+        "location": "ReferringPhysicianName"
+      },
+      {
+        "kind": "patient_name",
+        "value": "Robert·Garcia",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN4143616",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "birth_date",
+        "value": "1977．01．14",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "national_id",
+        "value": "110101197503038924",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "institution",
+        "value": "天河区中心医院",
+        "location": "report:comparison_sentence"
+      },
+      {
+        "kind": "physician_name",
+        "value": "黄燕",
+        "location": "report:physician_sentence"
+      },
+      {
+        "kind": "phone",
+        "value": "(342) 462-6828",
+        "location": "report:physician_sentence"
+      }
+    ]
+  },
+  {
+    "seed": 14,
+    "report_text_before": "The mediastinal contour is within normal limits. No visible pneumothorax or pleural fluid.",
+    "report_text_after": "姓名：周涛，详见下列记录。 住院号：8545410. 出生日期1990.07.25. ID: 110101198006262665. The mediastinal contour is within normal limits. Comparison exam performed at St. Augustine Medical Center was reviewed. No visible pneumothorax or pleural fluid. 医师：Robert·Davis既往体健，无特殊病史。 电话0086－150－1145－2015.",
+    "dicom_attributes": {
+      "PatientName": "LIU^LEI",
+      "PatientID": "MRN5291201",
+      "PatientBirthDate": "19771203",
+      "AccessionNumber": "ACC98375665",
+      "InstitutionName": "天河区中心医院",
+      "ReferringPhysicianName": "DAVIS^BARBARA"
+    },
+    "ground_truth": [
+      {
+        "kind": "patient_name",
+        "value": "LIU^LEI",
+        "location": "PatientName"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN5291201",
+        "location": "PatientID"
+      },
+      {
+        "kind": "birth_date",
+        "value": "19771203",
+        "location": "PatientBirthDate"
+      },
+      {
+        "kind": "accession",
+        "value": "ACC98375665",
+        "location": "AccessionNumber"
+      },
+      {
+        "kind": "institution",
+        "value": "天河区中心医院",
+        "location": "InstitutionName"
+      },
+      {
+        "kind": "physician_name",
+        "value": "DAVIS^BARBARA",
+        "location": "ReferringPhysicianName"
+      },
+      {
+        "kind": "patient_name",
+        "value": "周涛",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "patient_id",
+        "value": "8545410",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "birth_date",
+        "value": "1990.07.25",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "national_id",
+        "value": "110101198006262665",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "institution",
+        "value": "St. Augustine Medical Center",
+        "location": "report:comparison_sentence"
+      },
+      {
+        "kind": "physician_name",
+        "value": "Robert·Davis",
+        "location": "report:physician_sentence"
+      },
+      {
+        "kind": "phone",
+        "value": "0086－150－1145－2015",
+        "location": "report:physician_sentence"
+      }
+    ]
+  },
+  {
+    "seed": 15,
+    "report_text_before": "1. Cardiomegaly. 2. Tortuous aorta. Otherwise unremarkable chest radiograph.",
+    "report_text_after": "姓名：上官婉儿，详见下列记录。 住院号mrn1283210. 出生日期06.15.1954. 身份证号110101197306089573. 1. Cardiomegaly. 来自上海惠民医院的既往检查已复核。 2. Tortuous aorta. Otherwise unremarkable chest radiograph. 医师：John Garcia，详见下列记录。 电话512-944-9378.",
+    "dicom_attributes": {
+      "PatientName": "ZHANG^SAN",
+      "PatientID": "MRN3651013",
+      "PatientBirthDate": "19700102",
+      "AccessionNumber": "ACC29763339",
+      "InstitutionName": "上海惠民医院",
+      "ReferringPhysicianName": "MILLER^MARY"
+    },
+    "ground_truth": [
+      {
+        "kind": "patient_name",
+        "value": "ZHANG^SAN",
+        "location": "PatientName"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN3651013",
+        "location": "PatientID"
+      },
+      {
+        "kind": "birth_date",
+        "value": "19700102",
+        "location": "PatientBirthDate"
+      },
+      {
+        "kind": "accession",
+        "value": "ACC29763339",
+        "location": "AccessionNumber"
+      },
+      {
+        "kind": "institution",
+        "value": "上海惠民医院",
+        "location": "InstitutionName"
+      },
+      {
+        "kind": "physician_name",
+        "value": "MILLER^MARY",
+        "location": "ReferringPhysicianName"
+      },
+      {
+        "kind": "patient_name",
+        "value": "上官婉儿",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "patient_id",
+        "value": "mrn1283210",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "birth_date",
+        "value": "06.15.1954",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "national_id",
+        "value": "110101197306089573",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "institution",
+        "value": "上海惠民医院",
+        "location": "report:comparison_sentence"
+      },
+      {
+        "kind": "physician_name",
+        "value": "John Garcia",
+        "location": "report:physician_sentence"
+      },
+      {
+        "kind": "phone",
+        "value": "512-944-9378",
+        "location": "report:physician_sentence"
+      }
+    ]
+  },
+  {
+    "seed": 16,
+    "report_text_before": "Lungs are clear without focal consolidation. No pleural effusion or pneumothorax. Heart size is normal.",
+    "report_text_after": "Patient: Wilson, Barbara. Medical Record Number: 7870533. DOB: 1968.01.10. 身份证号110101197901262259. Lungs are clear without focal consolidation. 就诊于北京仁和医院的既往检查已复核。 No pleural effusion or pneumothorax. Heart size is normal. 医师：苏珊·居里，详见下列记录。 联系电话177-9808-4853.",
+    "dicom_attributes": {
+      "PatientName": "WILSON^BARBARA",
+      "PatientID": "MRN5780389",
+      "PatientBirthDate": "19930415",
+      "AccessionNumber": "ACC10785655",
+      "InstitutionName": "广州协和诊所",
+      "ReferringPhysicianName": "CHEN^MING"
+    },
+    "ground_truth": [
+      {
+        "kind": "patient_name",
+        "value": "WILSON^BARBARA",
+        "location": "PatientName"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN5780389",
+        "location": "PatientID"
+      },
+      {
+        "kind": "birth_date",
+        "value": "19930415",
+        "location": "PatientBirthDate"
+      },
+      {
+        "kind": "accession",
+        "value": "ACC10785655",
+        "location": "AccessionNumber"
+      },
+      {
+        "kind": "institution",
+        "value": "广州协和诊所",
+        "location": "InstitutionName"
+      },
+      {
+        "kind": "physician_name",
+        "value": "CHEN^MING",
+        "location": "ReferringPhysicianName"
+      },
+      {
+        "kind": "patient_name",
+        "value": "Wilson, Barbara",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "patient_id",
+        "value": "7870533",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "birth_date",
+        "value": "1968.01.10",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "national_id",
+        "value": "110101197901262259",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "institution",
+        "value": "北京仁和医院",
+        "location": "report:comparison_sentence"
+      },
+      {
+        "kind": "physician_name",
+        "value": "苏珊·居里",
+        "location": "report:physician_sentence"
+      },
+      {
+        "kind": "phone",
+        "value": "177-9808-4853",
+        "location": "report:physician_sentence"
+      }
+    ]
+  },
+  {
+    "seed": 17,
+    "report_text_before": "There is a 2.5 cm nodule in the right upper lobe. No cardiomegaly. Osseous structures are intact.",
+    "report_text_after": "患者：Walker, Robert既往体健，无特殊病史。 MRN5668705. 生日12／14／1989. ID: 110101199103180632. There is a 2.5 cm nodule in the right upper lobe. Comparison exam performed at Cedar Valley Clinic was reviewed. No cardiomegaly. Osseous structures are intact. 医师：诸葛亮华，详见下列记录。 手机+86．168．2023．1133.",
+    "dicom_attributes": {
+      "PatientName": "DAVIS^LINDA",
+      "PatientID": "MRN5859107",
+      "PatientBirthDate": "19621223",
+      "AccessionNumber": "ACC82502455",
+      "InstitutionName": "北京仁和医院",
+      "ReferringPhysicianName": "WANG^SAN"
+    },
+    "ground_truth": [
+      {
+        "kind": "patient_name",
+        "value": "DAVIS^LINDA",
+        "location": "PatientName"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN5859107",
+        "location": "PatientID"
+      },
+      {
+        "kind": "birth_date",
+        "value": "19621223",
+        "location": "PatientBirthDate"
+      },
+      {
+        "kind": "accession",
+        "value": "ACC82502455",
+        "location": "AccessionNumber"
+      },
+      {
+        "kind": "institution",
+        "value": "北京仁和医院",
+        "location": "InstitutionName"
+      },
+      {
+        "kind": "physician_name",
+        "value": "WANG^SAN",
+        "location": "ReferringPhysicianName"
+      },
+      {
+        "kind": "patient_name",
+        "value": "Walker, Robert",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN5668705",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "birth_date",
+        "value": "12／14／1989",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "national_id",
+        "value": "110101199103180632",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "institution",
+        "value": "Cedar Valley Clinic",
+        "location": "report:comparison_sentence"
+      },
+      {
+        "kind": "physician_name",
+        "value": "诸葛亮华",
+        "location": "report:physician_sentence"
+      },
+      {
+        "kind": "phone",
+        "value": "+86．168．2023．1133",
+        "location": "report:physician_sentence"
+      }
+    ]
+  },
+  {
+    "seed": 18,
+    "report_text_before": "Cardiomegaly without lung infiltrates. Mild tortuosity of the aorta noted.",
+    "report_text_after": "姓名：欧阳明月，详见下列记录。 Medical Record Number: 9212704. 出生日期05/15/2001. 身份证号110101195506176912. Cardiomegaly without lung infiltrates. 来自Cedar Valley Clinic的既往检查已复核。 Mild tortuosity of the aorta noted. Dr. Linda Miller. Contact: +86-169-8318-3307.",
+    "dicom_attributes": {
+      "PatientName": "WANG^YAN",
+      "PatientID": "MRN6612980",
+      "PatientBirthDate": "19700416",
+      "AccessionNumber": "ACC94313933",
+      "InstitutionName": "天河区中心医院",
+      "ReferringPhysicianName": "GARCIA^BARBARA"
+    },
+    "ground_truth": [
+      {
+        "kind": "patient_name",
+        "value": "WANG^YAN",
+        "location": "PatientName"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN6612980",
+        "location": "PatientID"
+      },
+      {
+        "kind": "birth_date",
+        "value": "19700416",
+        "location": "PatientBirthDate"
+      },
+      {
+        "kind": "accession",
+        "value": "ACC94313933",
+        "location": "AccessionNumber"
+      },
+      {
+        "kind": "institution",
+        "value": "天河区中心医院",
+        "location": "InstitutionName"
+      },
+      {
+        "kind": "physician_name",
+        "value": "GARCIA^BARBARA",
+        "location": "ReferringPhysicianName"
+      },
+      {
+        "kind": "patient_name",
+        "value": "欧阳明月",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "patient_id",
+        "value": "9212704",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "birth_date",
+        "value": "05/15/2001",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "national_id",
+        "value": "110101195506176912",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "institution",
+        "value": "Cedar Valley Clinic",
+        "location": "report:comparison_sentence"
+      },
+      {
+        "kind": "physician_name",
+        "value": "Linda Miller",
+        "location": "report:physician_sentence"
+      },
+      {
+        "kind": "phone",
+        "value": "+86-169-8318-3307",
+        "location": "report:physician_sentence"
+      }
+    ]
+  },
+  {
+    "seed": 19,
+    "report_text_before": "右侧胸腔积液，左肺纹理清晰。心影大小正常。未见气胸征象。",
+    "report_text_after": "患者：上官婉儿，详见下列记录。 Medical Record Number: 9878484. 生日19730209. ID: 110101198105271105. 右侧胸腔积液，左肺纹理清晰。心影大小正常。未见气胸征象。 来自北京仁和医院的既往检查已复核。 Dr. Brown, Patricia. Contact: +86－133－1865－8887.",
+    "dicom_attributes": {
+      "PatientName": "WANG^MING",
+      "PatientID": "MRN7602416",
+      "PatientBirthDate": "19840910",
+      "AccessionNumber": "ACC88477923",
+      "InstitutionName": "St. Augustine Medical Center",
+      "ReferringPhysicianName": "DAVIS^MARY"
+    },
+    "ground_truth": [
+      {
+        "kind": "patient_name",
+        "value": "WANG^MING",
+        "location": "PatientName"
+      },
+      {
+        "kind": "patient_id",
+        "value": "MRN7602416",
+        "location": "PatientID"
+      },
+      {
+        "kind": "birth_date",
+        "value": "19840910",
+        "location": "PatientBirthDate"
+      },
+      {
+        "kind": "accession",
+        "value": "ACC88477923",
+        "location": "AccessionNumber"
+      },
+      {
+        "kind": "institution",
+        "value": "St. Augustine Medical Center",
+        "location": "InstitutionName"
+      },
+      {
+        "kind": "physician_name",
+        "value": "DAVIS^MARY",
+        "location": "ReferringPhysicianName"
+      },
+      {
+        "kind": "patient_name",
+        "value": "上官婉儿",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "patient_id",
+        "value": "9878484",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "birth_date",
+        "value": "19730209",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "national_id",
+        "value": "110101198105271105",
+        "location": "report:demographics_line"
+      },
+      {
+        "kind": "institution",
+        "value": "北京仁和医院",
+        "location": "report:comparison_sentence"
+      },
+      {
+        "kind": "physician_name",
+        "value": "Brown, Patricia",
+        "location": "report:physician_sentence"
+      },
+      {
+        "kind": "phone",
+        "value": "+86－133－1865－8887",
+        "location": "report:physician_sentence"
+      }
+    ]
+  }
+]

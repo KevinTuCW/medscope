@@ -1,0 +1,33 @@
+[project]
+name = "medscope"
+version = "0.1.0"
+description = "Chest X-ray reading co-pilot for radiologists (educational demo, NOT a medical device)"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic",
+    "pydantic-settings",
+    "fastapi",
+    "uvicorn",
+    "pytest",
+    "pillow",
+    "numpy",
+    "httpx",
+]
+
+[project.optional-dependencies]
+cv = ["torch", "torchxrayvision", "pydicom"]
+llm = ["langgraph", "openai", "langfuse"]
+gen = ["diffusers"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: exercises real model weights (network/disk download on first run); deselected by default, run explicitly with -m slow",
+]
+addopts = "-m 'not slow'"
