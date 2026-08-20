@@ -20,6 +20,12 @@ class Finding(BaseModel):
     evidence_id: str = ""  # stable id that report sentences cite; auto-derived if left blank
     raw_label: str = ""  # reader's original wording, kept for audit
     notes: list[str] = Field(default_factory=list)  # carries VLM description text in describer mode
+    # Set by the arbiter (Task 2.4) for a disagreement it could not resolve
+    # (verdict UNCERTAIN) or never got to (budget exceeded): the finding is
+    # kept in the final set rather than silently dropped, but flagged so a
+    # human reviews it. Defaulted so existing readers/merge output is
+    # unaffected -- only the arbiter ever sets this True.
+    needs_human: bool = False
 
     @model_validator(mode="after")
     def _default_evidence_id(self) -> "Finding":
@@ -34,12 +40,39 @@ class Finding(BaseModel):
         return self
 
 
+class Description(BaseModel):
+    """One reader_b observation when `Settings.reader_b_mode ==
+    "describer"`.
+
+    Distinct from `Finding` on purpose: a `Finding` is a positive judgement
+    with a probability, from a named source, and gate G2 lets report
+    sentences cite a `Finding` as evidence. A demoted reader_b makes no
+    judgement -- if its description lived in the findings list in any form
+    (even a `Finding` with an unused/zero `prob`), the report writer
+    (Task 2.5) could cite it as evidence for a claim it never made. This
+    type makes that structurally impossible instead of relying on every
+    downstream consumer to remember the convention.
+
+    `label` carries `canonical()`'s output where the description's stated
+    label maps onto the shared ontology, or the raw label text otherwise --
+    this is what `merge.py`'s describer-mode matching keys on to attach a
+    description to the reader_a `Finding` it's about.
+    """
+
+    label: str
+    text: str
+    raw_label: str = ""
+
+
 class ReadResult(BaseModel):
     reader: Literal["a", "b"]
     findings: list[Finding] = Field(default_factory=list)
     latency_ms: int
     tokens: int = 0
     notes: list[str] = Field(default_factory=list)
+    # Populated instead of `findings` when reader_b runs in describer mode
+    # -- see `Description`'s docstring for why these are a separate type.
+    descriptions: list[Description] = Field(default_factory=list)
 
 
 class Disagreement(BaseModel):

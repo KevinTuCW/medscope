@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     kappa_floor: float = 0.4
     disagreement_ceiling: float = 0.4
     max_llm_judgments: int = 12
+    #: Process-guardrail cap. Truncation keeps the highest-probability
+    #: findings, so a cap can never discard a confident critical finding
+    #: while retaining noise.
+    max_findings: int = 50
     use_real_vlm: bool = False
     # QC's lateral-view screen (medscope.qc): mirror-symmetry score below
     # this is flagged "lateral_view". 0.5 sits in a wide empty band between

@@ -10,7 +10,7 @@ import math
 import pytest
 
 from medscope.merge import cohens_kappa, merge_reads
-from medscope.state import Finding, ReadResult
+from medscope.state import Description, Finding, ReadResult
 
 
 def _finding(label, prob, source="cnn", locus=None, raw_label=None, notes=None):
@@ -24,8 +24,16 @@ def _finding(label, prob, source="cnn", locus=None, raw_label=None, notes=None):
     )
 
 
+def _description(label, text, raw_label=None):
+    return Description(label=label, text=text, raw_label=raw_label if raw_label is not None else label)
+
+
 def _read(reader, findings, latency_ms=10):
     return ReadResult(reader=reader, findings=findings, latency_ms=latency_ms)
+
+
+def _read_descriptions(reader, descriptions, latency_ms=10):
+    return ReadResult(reader=reader, descriptions=descriptions, latency_ms=latency_ms)
 
 
 THRESHOLD = 0.5
@@ -187,13 +195,13 @@ def test_describer_mode_positive_set_equals_reader_a_exactly():
             _finding("Pneumothorax", 0.1),
         ],
     )
-    # reader_b's own probabilities must be ignored entirely in describer
-    # mode -- it contributes no positive/negative judgement.
-    read_b = _read(
+    # reader_b contributes descriptions, not a positive/negative judgement
+    # -- Description (unlike Finding) has no prob at all to ignore.
+    read_b = _read_descriptions(
         "b",
         [
-            _finding("Cardiomegaly", 0.05, source="vlm", notes=["心影明显增大，符合心脏扩大表现"]),
-            _finding("Pneumothorax", 0.99, source="vlm"),
+            _description("Cardiomegaly", "心影明显增大，符合心脏扩大表现"),
+            _description("Pneumothorax", "可见气胸征象"),
         ],
     )
 
@@ -206,7 +214,7 @@ def test_describer_mode_positive_set_equals_reader_a_exactly():
 
 def test_describer_mode_attaches_matching_descriptions_to_finding_notes():
     read_a = _read("a", [_finding("Cardiomegaly", 0.9)])
-    read_b = _read("b", [_finding("Cardiomegaly", 0.05, source="vlm", notes=["心影增大"])])
+    read_b = _read_descriptions("b", [_description("Cardiomegaly", "心影增大")])
 
     findings, _, _ = merge_reads(read_a, read_b, THRESHOLD, mode="describer")
 
@@ -214,15 +222,25 @@ def test_describer_mode_attaches_matching_descriptions_to_finding_notes():
     assert "心影增大" in cardiomegaly.notes
 
 
-def test_describer_mode_unmatched_description_is_not_discarded():
+def test_describer_mode_unmatched_description_is_not_a_finding():
+    # Task 2.3 revisited this twice: an unmatched description first
+    # synthesized a standalone prob=0.0 Finding (Task 1.6), which risked
+    # being picked up as a citation target downstream (a description is
+    # not a judgement). merge_reads never mutates its inputs, so the fix
+    # isn't to relocate the description -- it just never enters the merged
+    # findings list; it stays exactly where read_b put it (see
+    # tests/test_describer_mode.py::
+    # test_describer_unmatched_description_is_not_discarded_and_not_a_finding
+    # for the fuller "not discarded" check against a real read_b() output).
     read_a = _read("a", [_finding("Cardiomegaly", 0.9)])
     # reader_b mentions something reader_a's finding set has no entry for.
-    read_b = _read("b", [_finding("纵隔气肿", 0.5, source="vlm", notes=["可见纵隔气肿"])])
+    read_b = _read_descriptions("b", [_description("纵隔气肿", "可见纵隔气肿")])
 
     findings, _, _ = merge_reads(read_a, read_b, THRESHOLD, mode="describer")
 
+    assert all(f.label != "纵隔气肿" for f in findings)
     all_notes = [n for f in findings for n in f.notes]
-    assert "可见纵隔气肿" in all_notes
+    assert "可见纵隔气肿" not in all_notes
 
 
 # ---------------------------------------------------------------------------

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from medscope.config import Settings
 from medscope.ontology import canonical
-from medscope.state import Disagreement, Finding, ReadResult
+from medscope.state import Description, Disagreement, Finding, ReadResult
 
 
 def _split_mapped(findings: list[Finding]) -> tuple[dict[str, Finding], list[Finding]]:
@@ -43,6 +43,27 @@ def _split_mapped(findings: list[Finding]) -> tuple[dict[str, Finding], list[Fin
         else:
             mapped[canon] = finding
     return mapped, unmapped
+
+
+def _group_description_text(descriptions: list[Description]) -> dict[str, list[str]]:
+    """Group describer-mode `Description.text` by label, re-canonicalizing
+    each `Description.label` for the same defensive reason `_split_mapped`
+    re-canonicalizes `Finding.label` -- `_description_from_item` already
+    canonicalizes, so this is normally a no-op, but never trust a caller-
+    supplied label as already canonical.
+
+    A label with no canonical mapping keys on its own (raw) text here too:
+    it simply won't match anything in `a_mapped` (reader_a's findings are
+    already canonical-only), so it naturally stays unmatched rather than
+    needing separate unmapped-tracking the way `_split_mapped` does for
+    Findings feeding `_merge_reader`'s two-sided matching.
+    """
+    grouped: dict[str, list[str]] = {}
+    for description in descriptions:
+        canon = canonical(description.label)
+        key = canon if canon is not None else description.label
+        grouped.setdefault(key, []).append(description.text)
+    return grouped
 
 
 def _merge_finding(fa: Finding, fb: Finding, label: str) -> Finding:
@@ -118,38 +139,30 @@ def _merge_describer(
     positive/negative judgement, so there is nothing for it to disagree
     with reader_a about. The positive set equals reader_a's exactly.
 
-    reader_b's `Finding.notes` (its description text for a label -- see
-    that field's docstring in state.py) attach to the matching output
-    Finding by canonical label. A description with no matching reader_a
-    finding is not discarded: it surfaces as its own Finding, carrying the
-    text in `.notes` with `prob=0.0` (a neutral placeholder -- there is no
-    judgement to report a real probability for, and 0.0 can never
-    spuriously cross a positivity threshold downstream).
+    reader_b's `read_b.descriptions` (a list of `Description`, not
+    `Finding` -- see that type's docstring in state.py for why) attach to
+    the matching output Finding's `.notes` by canonical label. A
+    description with no matching reader_a finding is not discarded, but it
+    does not become a Finding either (Task 2.3 revisited Task 1.6's
+    original choice here, which matched on `read_b.findings` and
+    synthesized a standalone `prob=0.0` Finding for an unmatched one --
+    that shape only ever worked against hand-built test fixtures, since a
+    real describer-mode `read_b()` always returns `findings == []`; see
+    tests/test_describer_mode.py::test_describer_end_to_end_composition).
+    This function never mutates or drops its `read_a`/`read_b` inputs, so
+    an unmatched description stays fully recoverable from the caller's own
+    `read_b` (e.g. `state.read_b.descriptions`) -- it just never enters the
+    *merged* view, which is reserved for findings only.
     """
     a_mapped, a_unmapped = _split_mapped(read_a.findings)
-    b_mapped, b_unmapped = _split_mapped(read_b.findings)
+    b_text_by_label = _group_description_text(read_b.descriptions)
 
     findings: list[Finding] = []
     for label, fa in a_mapped.items():
-        fb = b_mapped.get(label)
-        notes = list(fa.notes) + list(fb.notes) if fb is not None else list(fa.notes)
-        findings.append(fa if fb is None else fa.model_copy(update={"notes": notes}))
+        extra_text = b_text_by_label.get(label, [])
+        notes = list(fa.notes) + extra_text if extra_text else fa.notes
+        findings.append(fa if not extra_text else fa.model_copy(update={"notes": notes}))
     findings.extend(a_unmapped)
-
-    unmatched_b = [f for label, f in b_mapped.items() if label not in a_mapped]
-    unmatched_b.extend(b_unmapped)
-    for fb in unmatched_b:
-        if not fb.notes:
-            continue
-        findings.append(
-            Finding(
-                label=fb.label,
-                prob=0.0,
-                source=fb.source,
-                raw_label=fb.raw_label,
-                notes=list(fb.notes),
-            )
-        )
 
     # No second judgement to compare reader_a against, so there is nothing
     # to classify as a disagreement in describer mode.

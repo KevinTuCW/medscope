@@ -59,13 +59,40 @@ def _fail(url: str, reason: str) -> None:
 
 
 def _download_full(url: str, timeout: float = 60.0) -> bytes:
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/151.0.0.0 Safari/537.36"
+        ),
+        "Accept": "*/*",
+        "Referer": "https://openi.nlm.nih.gov/",
+    }
+
     try:
-        resp = httpx.get(url, timeout=timeout, follow_redirects=True)
+        resp = httpx.get(
+            url,
+            headers=headers,
+            timeout=timeout,
+            follow_redirects=True,
+        )
     except httpx.HTTPError as exc:
         _fail(url, f"connection error ({exc})")
-        raise  # unreachable, _fail always raises; satisfies type checkers
+        raise
+
     if resp.status_code != 200:
         _fail(url, f"HTTP {resp.status_code}")
+
+    # gzip 文件的 magic number 是 1f 8b
+    if not resp.content.startswith(b"\x1f\x8b"):
+        preview = resp.content[:200].decode("utf-8", errors="replace")
+        _fail(
+            url,
+            f"response is not gzip data "
+            f"(Content-Type={resp.headers.get('content-type')}, "
+            f"size={len(resp.content)}, preview={preview!r})",
+        )
+
     return resp.content
 
 
