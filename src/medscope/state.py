@@ -117,6 +117,12 @@ class StudyState(BaseModel):
     findings: list[Finding] = Field(default_factory=list)
     disagreements: list[Disagreement] = Field(default_factory=list)
     kappa: float | None = None
+    #: One record per disagreement, including ones the budget cap left
+    #: unarbitrated. Kept as a fact rather than re-derived downstream: the
+    #: workbench used to infer a verdict from whether a finding survived
+    #: into the final set, which silently couples the audit view to
+    #: `arbiter.py`'s internals and would misreport if those ever change.
+    arbitration_records: list[dict] = Field(default_factory=list)
     alerts: list[CriticalAlert] = Field(default_factory=list)
     report: ReportDraft | None = None
     status: Literal[

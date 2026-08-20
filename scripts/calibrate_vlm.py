@@ -95,7 +95,7 @@ def main() -> None:
 
     print(f"Reading {len(studies)} study(ies) from {root}...")
     if is_offline:
-        print("reader_b: OfflineVLMClient (no MEDSCOPE_USE_REAL_VLM / API key configured)")
+        print("reader_b: OfflineVLMClient (no USE_REAL_VLM / API key configured)")
     else:
         print(f"reader_b: real VLM ({settings.vlm_model})")
 
@@ -173,7 +173,7 @@ def main() -> None:
             "\n"
             "Refusing to print a peer/describer recommendation.\n"
             "To get an actual calibration decision, configure a real VLM\n"
-            "(MEDSCOPE_USE_REAL_VLM=true, MEDSCOPE_VLM_MODEL, MEDSCOPE_VLM_API_KEY)\n"
+            "(USE_REAL_VLM=true, VLM_MODEL, VLM_API_KEY)\n"
             "and rerun this script."
         )
         sys.exit(2)

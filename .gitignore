@@ -15,3 +15,7 @@ dist/
 data/openi/
 *.tgz
 outputs/
+
+# medscope.store.SqliteRunStore's default location -- a runtime artifact
+# (persisted workbench runs), not a fixture.
+data/runs.sqlite3

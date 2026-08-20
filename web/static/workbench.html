@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>medscope workbench</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #0f1216;
+    --panel: #171b21;
+    --border: #2a3038;
+    --text: #e6e9ef;
+    --muted: #8b94a3;
+    --accent: #3ba7ff;
+    --warn: #ffb84d;
+    --danger: #ff5c5c;
+    --ok: #4dd68a;
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  header.banner {
+    background: #3a2a0a;
+    border-bottom: 1px solid var(--warn);
+    color: var(--warn);
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 16px;
+    display: grid;
+    gap: 16px;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  select, button {
+    background: #1f242c;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  #progress-log { color: var(--muted); font-size: 12px; margin-top: 8px; min-height: 1.2em; }
+  #status-pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+  }
+  #status-pill.DRAFT_READY { color: var(--ok); border-color: var(--ok); }
+  #status-pill.HELD, #status-pill.NEEDS_REPEAT, #status-pill.GUARDRAIL_BLOCKED { color: var(--warn); border-color: var(--warn); }
+  #status-pill.CRITICAL_ESCALATED { color: var(--danger); border-color: var(--danger); }
+
+  #critical-banner {
+    display: none;
+    background: #3a0f0f;
+    border: 1px solid var(--danger);
+    color: #ffdada;
+    border-radius: 8px;
+    padding: 12px;
+  }
+  #critical-banner.show { display: block; }
+  #critical-banner h2 { color: var(--danger); }
+  .timeline-item { display: flex; gap: 8px; font-size: 12px; color: var(--muted); }
+  .timeline-item .node { color: var(--text); }
+
+  .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+  #xray-canvas { width: 100%; height: auto; background: #000; border-radius: 6px; display: block; }
+  .canvas-controls { margin-top: 8px; display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  tr.disagreement td { background: rgba(255, 92, 92, 0.08); }
+  tr.row-highlight td { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .kind-badge { font-size: 11px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--border); color: var(--muted); }
+
+  #report-body.blocked { opacity: .45; filter: grayscale(60%); pointer-events: none; }
+  #report-blocked-reasons {
+    display: none;
+    background: #3a0f0f;
+    border: 1px solid var(--danger);
+    color: #ffdada;
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 10px;
+    font-size: 12px;
+  }
+  #report-blocked-reasons.show { display: block; }
+  .sentence { padding: 4px 6px; border-radius: 4px; cursor: default; }
+  .sentence:hover, .sentence.hover { background: rgba(59, 167, 255, 0.15); }
+  .sentence .section-tag { font-size: 10px; color: var(--muted); text-transform: uppercase; margin-right: 6px; }
+  .disclaimer { margin-top: 10px; font-size: 12px; color: var(--warn); border-top: 1px dashed var(--border); padding-top: 8px; }
+
+  pre.audit-json { white-space: pre-wrap; word-break: break-word; font-size: 11px; color: var(--muted); max-height: 240px; overflow: auto; }
+  .empty-hint { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+
+<header class="banner">
+  教学演示，非医疗器械（NOT a medical device）。所有草稿均为 AI 生成，仅供参考，必须经执业医师复核后方可用于临床。
+</header>
+
+<main>
+  <div class="panel">
+    <h1>medscope workbench</h1>
+    <div class="controls">
+      <select id="study-select"></select>
+      <button id="run-btn" type="button">Run study</button>
+      <span id="status-pill"></span>
+    </div>
+    <div id="progress-log"></div>
+  </div>
+
+  <div id="critical-banner" class="panel">
+    <h2>Critical finding — bypassed the report chain</h2>
+    <div id="critical-alerts"></div>
+    <div id="critical-timeline" style="margin-top:8px;"></div>
+  </div>
+
+  <div class="layout">
+    <div class="panel">
+      <h2>Image · reader_a localization</h2>
+      <canvas id="xray-canvas" width="512" height="512"></canvas>
+      <div class="canvas-controls">
+        <label><input type="checkbox" id="toggle-reader-a" checked> show reader_a (CNN) loci</label>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Dual read — reader_a (CNN) vs reader_b (VLM)</h2>
+      <div id="kappa-line" class="empty-hint"></div>
+      <table id="dual-read-table">
+        <thead>
+          <tr><th>label</th><th>reader_a</th><th>reader_b</th><th>agreed</th><th>kind</th><th>verdict</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Report draft</h2>
+    <div id="report-blocked-reasons"></div>
+    <div id="report-body">
+      <div id="report-sentences"></div>
+      <div id="report-disclaimer" class="disclaimer"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Audit trail</h2>
+    <div id="audit-summary" class="empty-hint"></div>
+    <pre id="audit-json" class="audit-json"></pre>
+  </div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var state = {
+    dashboard: null,
+    showReaderA: true,
+    hoverIds: []
+  };
+
+  var el = {
+    studySelect: document.getElementById("study-select"),
+    runBtn: document.getElementById("run-btn"),
+    statusPill: document.getElementById("status-pill"),
+    progressLog: document.getElementById("progress-log"),
+    criticalBanner: document.getElementById("critical-banner"),
+    criticalAlerts: document.getElementById("critical-alerts"),
+    criticalTimeline: document.getElementById("critical-timeline"),
+    canvas: document.getElementById("xray-canvas"),
+    toggleReaderA: document.getElementById("toggle-reader-a"),
+    kappaLine: document.getElementById("kappa-line"),
+    dualReadBody: document.querySelector("#dual-read-table tbody"),
+    reportBlockedReasons: document.getElementById("report-blocked-reasons"),
+    reportBody: document.getElementById("report-body"),
+    reportSentences: document.getElementById("report-sentences"),
+    reportDisclaimer: document.getElementById("report-disclaimer"),
+    auditSummary: document.getElementById("audit-summary"),
+    auditJson: document.getElementById("audit-json")
+  };
+
+  var xrayImage = new Image();
+  xrayImage.addEventListener("load", drawCanvas);
+
+  function fmtProb(p) {
+    return p === null || p === undefined ? "—" : p.toFixed(2);
+  }
+
+  // -- loading the study list --------------------------------------------
+
+  function loadStudies() {
+    fetch("/studies")
+      .then(function (r) { return r.json(); })
+      .then(function (body) {
+        el.studySelect.innerHTML = "";
+        body.studies.forEach(function (s) {
+          var opt = document.createElement("option");
+          opt.value = s.study_id;
+          opt.textContent = s.study_id + " — " + (s.indication || "(no indication on file)");
+          el.studySelect.appendChild(opt);
+        });
+      });
+  }
+
+  // -- running a study, streamed -------------------------------------------
+
+  function runSelectedStudy() {
+    var studyId = el.studySelect.value;
+    if (!studyId) return;
+
+    el.runBtn.disabled = true;
+    el.progressLog.textContent = "starting…";
+    el.statusPill.textContent = "";
+    el.statusPill.className = "";
+
+    var source = new EventSource("/workbench/stream?study_id=" + encodeURIComponent(studyId));
+    var seenNodes = [];
+
+    source.addEventListener("start", function () {
+      seenNodes = [];
+      el.progressLog.textContent = "started";
+    });
+
+    source.addEventListener("node", function (evt) {
+      var payload = JSON.parse(evt.data);
+      seenNodes.push(payload.node);
+      el.progressLog.textContent = seenNodes.join(" → ");
+    });
+
+    source.addEventListener("complete", function (evt) {
+      var dashboard = JSON.parse(evt.data);
+      render(dashboard);
+      el.runBtn.disabled = false;
+      source.close();
+    });
+
+    source.onerror = function () {
+      el.progressLog.textContent = seenNodes.length
+        ? seenNodes.join(" → ") + " — stream ended"
+        : "stream error";
+      el.runBtn.disabled = false;
+      source.close();
+    };
+  }
+
+  // -- rendering ------------------------------------------------------------
+
+  function render(dashboard) {
+    state.dashboard = dashboard;
+    state.hoverIds = [];
+
+    el.statusPill.textContent = dashboard.status;
+    el.statusPill.className = dashboard.status;
+
+    renderCritical(dashboard.critical);
+    renderImage(dashboard.image);
+    renderDualRead(dashboard.dual_read);
+    renderReport(dashboard.report, dashboard.blocked, dashboard.audit.notes);
+    renderAudit(dashboard.audit);
+  }
+
+  function renderCritical(critical) {
+    if (!critical.alerts.length) {
+      el.criticalBanner.classList.remove("show");
+      return;
+    }
+    el.criticalBanner.classList.add("show");
+    el.criticalAlerts.innerHTML = "";
+    critical.alerts.forEach(function (a) {
+      var line = document.createElement("div");
+      line.textContent = a.label + " — prob " + fmtProb(a.prob) + " (" + a.source + ") detected at " + a.detected_at;
+      el.criticalAlerts.appendChild(line);
+    });
+
+    el.criticalTimeline.innerHTML = "";
+    critical.timeline.forEach(function (e) {
+      var row = document.createElement("div");
+      row.className = "timeline-item";
+      var node = document.createElement("span");
+      node.className = "node";
+      node.textContent = e.node;
+      var ts = document.createElement("span");
+      ts.textContent = new Date(e.ts * 1000).toISOString();
+      row.appendChild(node);
+      row.appendChild(ts);
+      el.criticalTimeline.appendChild(row);
+    });
+  }
+
+  function renderImage(image) {
+    if (image.data_url) {
+      xrayImage.src = image.data_url;
+    } else {
+      xrayImage.removeAttribute("src");
+      drawCanvas();
+    }
+  }
+
+  function renderDualRead(dualRead) {
+    el.kappaLine.textContent = "Cohen's kappa: " + (dualRead.kappa === null ? "—" : dualRead.kappa.toFixed(3));
+    el.dualReadBody.innerHTML = "";
+    dualRead.rows.forEach(function (row) {
+      var tr = document.createElement("tr");
+      tr.dataset.label = row.label;
+      if (!row.agreed) tr.classList.add("disagreement");
+
+      tr.appendChild(cell(row.label));
+      tr.appendChild(cell(fmtProb(row.a_prob)));
+      tr.appendChild(cell(fmtProb(row.b_prob)));
+      tr.appendChild(cell(row.agreed ? "yes" : "no"));
+
+      var kindTd = document.createElement("td");
+      if (row.kind) {
+        var badge = document.createElement("span");
+        badge.className = "kind-badge";
+        badge.textContent = row.kind;
+        kindTd.appendChild(badge);
+      } else {
+        kindTd.textContent = "—";
+      }
+      tr.appendChild(kindTd);
+
+      tr.appendChild(cell(row.verdict || "—"));
+      el.dualReadBody.appendChild(tr);
+    });
+  }
+
+  function cell(text) {
+    var td = document.createElement("td");
+    td.textContent = text;
+    return td;
+  }
+
+  function renderReport(report, blocked, notes) {
+    el.reportBody.classList.toggle("blocked", blocked);
+
+    if (blocked) {
+      var reasons = (notes || []).filter(function (n) {
+        return n.indexOf("output guardrail withheld the draft") !== -1;
+      });
+      el.reportBlockedReasons.innerHTML = "";
+      var title = document.createElement("div");
+      title.textContent = "Draft withheld — this study's status is not DRAFT_READY, so no draft is shown as final:";
+      el.reportBlockedReasons.appendChild(title);
+      if (reasons.length) {
+        reasons.forEach(function (r) {
+          var line = document.createElement("div");
+          line.textContent = "• " + r;
+          el.reportBlockedReasons.appendChild(line);
+        });
+      }
+      el.reportBlockedReasons.classList.add("show");
+    } else {
+      el.reportBlockedReasons.classList.remove("show");
+    }
+
+    el.reportSentences.innerHTML = "";
+    if (!report.sentences.length) {
+      var hint = document.createElement("div");
+      hint.className = "empty-hint";
+      hint.textContent = "(no report sentences — this study did not reach the report writer)";
+      el.reportSentences.appendChild(hint);
+    }
+    report.sentences.forEach(function (sentence) {
+      var div = document.createElement("div");
+      div.className = "sentence";
+      div.dataset.evidenceIds = sentence.evidence_ids.join(",");
+
+      var tag = document.createElement("span");
+      tag.className = "section-tag";
+      tag.textContent = sentence.section;
+      div.appendChild(tag);
+      div.appendChild(document.createTextNode(sentence.text));
+
+      div.addEventListener("mouseenter", function () { setHover(sentence.evidence_ids); });
+      div.addEventListener("mouseleave", function () { setHover([]); });
+
+      el.reportSentences.appendChild(div);
+    });
+
+    el.reportDisclaimer.textContent = report.disclaimer || "";
+  }
+
+  function renderAudit(audit) {
+    var fired = (audit.deid && audit.deid.indication && audit.deid.indication.patterns_fired) || [];
+    el.auditSummary.textContent =
+      "de-id patterns fired: " + (fired.length ? fired.join(", ") : "none") +
+      " · budget spent: " + audit.budget_spent +
+      " · total latency: " + (audit.latency_ms.total === null ? "—" : Math.round(audit.latency_ms.total) + "ms");
+    el.auditJson.textContent = JSON.stringify(audit, null, 2);
+  }
+
+  // -- hover: sentence -> table row + image region -------------------------
+
+  function setHover(evidenceIds) {
+    state.hoverIds = evidenceIds || [];
+
+    var labels = [];
+    if (state.dashboard) {
+      var map = state.dashboard.report.evidence_map;
+      state.hoverIds.forEach(function (id) {
+        var resolved = map[id];
+        if (resolved) labels.push(resolved.label);
+      });
+    }
+
+    Array.prototype.forEach.call(el.dualReadBody.children, function (tr) {
+      tr.classList.toggle("row-highlight", labels.indexOf(tr.dataset.label) !== -1);
+    });
+
+    drawCanvas();
+  }
+
+  // -- canvas ---------------------------------------------------------------
+
+  function drawCanvas() {
+    var ctx = el.canvas.getContext("2d");
+    ctx.clearRect(0, 0, el.canvas.width, el.canvas.height);
+    if (xrayImage.complete && xrayImage.naturalWidth) {
+      ctx.drawImage(xrayImage, 0, 0, el.canvas.width, el.canvas.height);
+    }
+    if (!state.dashboard || !state.showReaderA) return;
+
+    var highlightLabels = [];
+    if (state.dashboard) {
+      var map = state.dashboard.report.evidence_map;
+      state.hoverIds.forEach(function (id) {
+        var resolved = map[id];
+        if (resolved) highlightLabels.push(resolved.label);
+      });
+    }
+
+    var loci = state.dashboard.image.readers.a;
+    var minSide = Math.min(el.canvas.width, el.canvas.height);
+    loci.forEach(function (locus) {
+      var cx = locus.cx * el.canvas.width;
+      var cy = locus.cy * el.canvas.height;
+      var r = Math.max(locus.r * minSide, 6);
+      var highlighted = highlightLabels.indexOf(locus.label) !== -1;
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.strokeStyle = highlighted ? "#ff5c5c" : "#3ba7ff";
+      ctx.lineWidth = highlighted ? 4 : 2;
+      ctx.stroke();
+
+      ctx.font = "12px sans-serif";
+      ctx.fillStyle = highlighted ? "#ff5c5c" : "#3ba7ff";
+      ctx.fillText(locus.label + " (" + fmtProb(locus.prob) + ")", cx + r + 4, cy);
+    });
+  }
+
+  // -- wiring -----------------------------------------------------------------
+
+  el.runBtn.addEventListener("click", runSelectedStudy);
+  el.toggleReaderA.addEventListener("change", function () {
+    state.showReaderA = el.toggleReaderA.checked;
+    drawCanvas();
+  });
+
+  loadStudies();
+})();
+</script>
+
+</body>
+</html>

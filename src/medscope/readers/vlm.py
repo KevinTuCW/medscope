@@ -155,10 +155,10 @@ def build_vlm_client(settings: Settings) -> VLMClient:
 
     if not settings.vlm_api_key or not settings.vlm_model:
         raise RuntimeError(
-            "use_real_vlm is True but MEDSCOPE_VLM_API_KEY and/or "
-            "MEDSCOPE_VLM_MODEL is not configured. Refusing to silently "
+            "use_real_vlm is True but VLM_API_KEY and/or "
+            "VLM_MODEL is not configured. Refusing to silently "
             "fall back to the offline reader_b stand-in -- set both, or "
-            "set MEDSCOPE_USE_REAL_VLM=false."
+            "set USE_REAL_VLM=false."
         )
 
     return OpenAICompatibleModelClient(

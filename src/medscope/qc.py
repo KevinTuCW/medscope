@@ -45,7 +45,7 @@ def check_quality(image: Image.Image, settings: Settings | None = None) -> QCRes
     """Run all QC checks against a single image and return a QCResult.
 
     `settings` defaults to a fresh `Settings()` if not given (picks up
-    `lateral_symmetry_threshold`, tunable via MEDSCOPE_LATERAL_SYMMETRY_THRESHOLD).
+    `lateral_symmetry_threshold`, tunable via LATERAL_SYMMETRY_THRESHOLD).
     """
     settings = settings or Settings()
     issues: list[str] = []

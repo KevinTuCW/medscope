@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Create venv and install dependencies
+        # Mirrors the documented local setup (python3.12 -m venv .venv +
+        # pip install -e ".[cv,llm]") so the Makefile targets below, which
+        # hardcode `.venv/bin/...`, run exactly the same commands a
+        # developer runs locally -- one source of truth for "how to test
+        # this repo", not a parallel CI-only recipe.
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -e ".[cv,llm]"
+
+      - name: Run test suite
+        run: make test
+
+      - name: Run delivery gate (medscope-eval)
+        # eval.py's main() exits 2 when any hard suite fails (see
+        # medscope/eval.py's HARD_SUITES / module docstring) -- that
+        # non-zero exit is what fails this step, and therefore the job.
+        # That's the entire point of the gate: it must be able to block a
+        # merge, not just print a red line nobody enforces.
+        # --min-cases 3 refuses to treat a suite as a meaningful pass if its
+        # corpus (committed sample studies / eval fixtures) has silently
+        # shrunk below what's committed today.
+        run: make eval EVAL_ARGS="--min-cases 3 --report-path /tmp/medscope-eval-report.json"
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: medscope-eval-report
+          path: /tmp/medscope-eval-report.json
+          if-no-files-found: warn

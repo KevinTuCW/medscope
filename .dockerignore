@@ -1,0 +1,30 @@
+# Never let a real environment file, credential, or the dev virtualenv
+# reach a build context -- let alone an image layer. See Dockerfile's
+# comment on how this was verified.
+.venv
+.env
+.env.*
+!.env.example
+
+# The real (gitignored) Open-I dataset -- large, and not needed to run the
+# app; the committed data/samples/ fixtures are what the workbench serves.
+data/openi/
+data/runs.sqlite3
+
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+.git/
+.github/
+*.tgz
+outputs/
+
+# Editor/OS cruft, never needed in the image.
+.DS_Store

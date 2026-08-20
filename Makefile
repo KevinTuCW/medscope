@@ -4,7 +4,7 @@ test:
 	PYTHONPATH=src .venv/bin/pytest -q
 
 eval:
-	@echo "not implemented yet"
+	PYTHONPATH=src .venv/bin/python -m medscope.eval $(EVAL_ARGS)
 
 run:
 	@echo "not implemented yet"

@@ -1,0 +1,17 @@
+services:
+  medscope:
+    build: .
+    ports:
+      - "8000:8000"
+    # Optional -- the image runs fully offline without one (see Dockerfile).
+    # Only picked up if ./.env actually exists; nothing in this file
+    # requires it, and no key is baked into the image regardless.
+    env_file:
+      - path: .env
+        required: false
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u,sys; sys.exit(0 if u.urlopen('http://127.0.0.1:8000/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3

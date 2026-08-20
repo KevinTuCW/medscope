@@ -139,6 +139,7 @@ class GraphState(TypedDict, total=False):
     findings: list[Finding]
     disagreements: list[Disagreement]
     kappa: float | None
+    arbitration_records: list[dict]
     alerts: list[CriticalAlert]
     report: ReportDraft | None
     status: str
@@ -317,6 +318,7 @@ def build_graph(deps: GraphDeps):
         return {
             "findings": outcome.findings,
             "notes": list(outcome.notes),
+            "arbitration_records": [r.model_dump(mode="json") for r in outcome.records],
             "budget_spent": outcome.calls_made,
             "trace_events": [_trace_event("arbiter")],
         }

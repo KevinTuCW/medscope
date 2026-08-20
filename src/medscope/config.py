@@ -14,7 +14,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="MEDSCOPE_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
@@ -56,6 +55,13 @@ class Settings(BaseSettings):
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
     langfuse_host: str = ""
+
+    # medscope.store: which RunStore backend persists workbench runs.
+    # "memory" (default) matches the old `workbench._RESULTS` behaviour --
+    # process-local, lost on restart. "sqlite" durably persists across
+    # restarts via the stdlib sqlite3 backend at `sqlite_path`.
+    run_store: Literal["memory", "sqlite"] = "memory"
+    sqlite_path: str = "data/runs.sqlite3"
 
     @property
     def tracing_enabled(self) -> bool:
