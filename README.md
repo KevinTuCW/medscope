@@ -2,17 +2,19 @@
 
 # 🩻 medscope
 
-**医生端胸片阅片副驾** —— 异质双读一裁（CNN × VLM，失效模式正交）· 危急值旁路抢报 · 每句结论挂证据(硬门) · PHI 0 泄漏(硬门) · 诊断口径红线(硬门) · 五套件 eval 门禁 · 零构建工作台悬停即溯源
+**医生端胸片阅片副驾** —— 异质双读一裁（CNN × VLM，失效模式正交）· 危急值旁路抢报 · 每句结论挂证据(硬门) · PHI 0 泄漏(硬门) · 诊断口径红线(硬门) · 六套件 eval 门禁 · 零构建工作台悬停即溯源
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](#-许可证)
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![TorchXRayVision](https://img.shields.io/badge/TorchXRayVision-densenet121--res224--all-orange.svg)](https://github.com/mlmed/torchxrayvision)
-[![LangGraph](https://img.shields.io/badge/LangGraph-orchestration-1c3c3c.svg)](https://langchain-ai.github.io/langgraph/)
-[![Qwen3-VL](https://img.shields.io/badge/reader__b-Qwen3--VL--32B-6b46c1.svg)](https://github.com/QwenLM/Qwen3-VL)
+[![LangGraph](https://img.shields.io/badge/LangGraph-orchestration-1C3C3C.svg)](https://langchain-ai.github.io/langgraph/)
+[![Qwen3-VL](https://img.shields.io/badge/reader__b-Qwen3--VL--32B-6B46C1.svg)](https://github.com/QwenLM/Qwen3-VL)
+[![Langfuse](https://img.shields.io/badge/Langfuse-tracing-fbbf24.svg)](https://langfuse.com/)
+[![CI](https://img.shields.io/badge/CI-tests%20%2B%20eval%20gate-2088FF.svg?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
 [![tests](https://img.shields.io/badge/tests-352%20passed-brightgreen.svg)](#-评测)
-[![gate](https://img.shields.io/badge/make%20eval-G1%20FAIL-red.svg)](#-评测)
-[![PHI leaks](https://img.shields.io/badge/PHI泄漏-0-brightgreen.svg)](#-评测)
+[![PHI leaks](https://img.shields.io/badge/PHI%20leaks-0-brightgreen.svg)](#-评测)
+[![gate](https://img.shields.io/badge/eval%20gate-G1%20FAIL-red.svg)](#-评测)
 
 「武道AI / AI Engineering Dojo」**以阵制胜**系列 · 阵 05 · 高风险域里，把「测不准」写在门上而不是藏进指标
 
@@ -61,35 +63,46 @@
 ## 🏗️ 架构
 
 ```text
-                    浏览器工作台（五块面板 · SSE 逐节点流式）
-                                  │
-┌─────────────────────────────────┴──────────────────────────────────┐
-│  intake ──→ deid ──→ qc ─┬─(分辨率/无信号)→ NEEDS_REPEAT 终止        │
-│                          │                                          │
-│                          ├──→ reader_a (CNN)  ─┐                    │
-│                          ├──→ reader_b (VLM)  ─┤  独立读片           │
-│                          │    prompt 不含对方任何输出                 │
-│                          ↓                     ↓                    │
-│                        merge（分歧检测 + Cohen's kappa）             │
-│                          │                                          │
-│            ┌─────旁路────┤                                          │
-│            ↓             ↓                                          │
-│   critical_triage    arbiter（只处理分歧项 · 看图 + 指南 RAG）        │
-│      抢报告先告警         ↓                                          │
-│                    report_writer                                    │
-│                          ↓                                          │
-│                    evidence_check ──(零引用句)──┐                   │
-│                          ↓                     │ 重试一次            │
-│                    language_guard  ←───────────┘                    │
-│                          ↓                                          │
-│                    review_queue（人在环签发）                        │
-└────────────────────────────────────────────────────────────────────┘
-        guardrails: input(注入筛查) / process(预算) / output(口径+PHI)
+胸片 + 检查申请单 + 既往病历文本
+   │
+   ▼
+输入护栏（无图像 → 阻断 GUARDRAIL_BLOCKED；注入只记录、不阻断阅片）
+   │
+   ▼
+deid 脱敏（DICOM 标签白名单 + 文本 PHI 规则 · G4 硬门）
+   │
+   ▼
+qc 图像质控 ─▶ 分辨率过低 / 无信号 → NEEDS_REPEAT 终止（侧位仅软告警）
+   │
+   ├──▶ reader_a（CNN · 18 类概率 + Grad-CAM）─┐
+   └──▶ reader_b（VLM · 看原图独立读片）      ─┤  prompt 互不含对方任何输出
+   │                                          │
+   ▼                                          ▼
+merge 合并（presence / magnitude / unique 三类分歧 + Cohen's kappa）
+   │
+   ├──旁路──▶ critical_triage 危急值分诊 ──▶ 抢在报告之前告警（G1 硬门）
+   │
+   ▼
+arbiter 仲裁（只跑分歧项 · 自己看图 + 指南 RAG · max_llm_judgments 封顶）
+   │
+   ▼
+report_writer 四段草稿（技术 / 所见 / 印象 / 建议，逐句挂证据 id）
+   │
+   ▼
+evidence_check ─▶ 有零引用句 → 重试一次 → 仍有则剥离（G2 硬门）
+   │
+   ▼
+language_guard 诊断口径红线 + 免责声明强制（G3 硬门）
+   │
+   ▼
+review_queue ─▶ 报告草稿 + 证据链 + 危急值时间线 → 执业医师签发
 ```
 
-**双读的独立性是被测试守护的**，不是靠自觉：`tests/test_reader_independence.py` 断言 `reader_a` 的任何输出都不得出现在 `reader_b` 的 prompt 里，`describer` 降级模式下依然独立。
-
-**降级分支是正式设计而非风险备注**：`kappa < 0.4 或 分歧率 > 40%` 时 `reader_b` 从「独立读者」降为「描述生成器」（只描述征象不下判定，判定权归 CNN，仲裁语义改为「描述是否支持 CNN 判定」），由 `READER_B_MODE` 控制，两种模式都有测试覆盖。
+- **异质双读**（`readers/` + `merge.py`）—— CNN 出数不懂语境，VLM 懂语境不出数，**失效模式正交**。`tests/test_reader_independence.py` 断言 reader_a 的任何输出都不得出现在 reader_b 的 prompt 里，`describer` 降级模式下依然独立。
+- **一裁**（`arbiter.py`）—— 只看两个读者的结论 + 指南散文，等于拿先验重新掂量断言；仲裁器走 `chat_with_image` **自己看图**，prompt 明确要求「根据图上所见判断，而非重新掂量两读者报告的概率」。
+- **危急值旁路**（`critical.py`）—— 不依赖报告存在、不依赖 `merge_reads`、不等仲裁：一个只有单读者叫阳性的危急标签必须立刻告警，所以它拿的是两读者的**原始 findings** 而非合并后的一致项。
+- **降级分支是正式设计**（`READER_B_MODE`）—— `kappa < 0.4 或 分歧率 > 40%` 时 reader_b 从「独立读者」降为「描述生成器」（判定权归 CNN，仲裁语义改为「描述是否支持 CNN 判定」），两种模式都有测试覆盖。
+- 整条流水线由 **LangGraph** 编排（条件路由 + 并行旁路 + evidence 重试回环），三层护栏 `input` / `process` / `output` 横切全程。
 
 ## 🧱 技术栈
 
@@ -315,28 +328,58 @@ LANGFUSE_PUBLIC_KEY=... LANGFUSE_SECRET_KEY=... LANGFUSE_HOST=https://us.cloud.l
 ## 📁 项目结构
 
 ```text
-src/medscope/
-  data/openi.py      数据集加载与图文配对
-  data/synth_phi.py  合成 PHI 注入器（G4 的验证前提，必须先于 deid.py 写）
-  deid.py            DICOM 白名单 + 文本 PHI 规则 + scan_payload（G4 评分函数）
-  qc.py              图像质控 + 正位/侧位筛查
-  ontology.py        标签本体；CRITICAL_LABELS 是 G1 的单一真源（不进 config）
-  readers/cnn.py     reader_a：概率 + Grad-CAM
-  readers/vlm.py     reader_b + 独立性守护 + describer 降级
-  merge.py           合并、分歧检测、Cohen's kappa
-  arbiter.py         看图仲裁 + 指南 RAG
-  critical.py        危急值分诊（与报告并行）
-  report.py          四段草稿撰写      evidence.py  G2 证据校验
-  language.py        G3 口径红线       guardrails/  input / process / output 三层
-  graph.py           LangGraph 编排    runner.py    执行入口
-  workbench.py       五块 Dashboard + SSE          app.py  FastAPI
-  eval.py            五道硬门          store.py     审计持久化
-scripts/
-  fetch_openi.py           数据集拉取（HTTP Range 前缀下载）
-  build_critical_goldset.py G1 金标准候选生成（候选须人工核对后才入库）
-  calibrate_vlm.py         reader_b 基线校准 / 降级决策
-  gen_phi_fixture.py       G4 夹具生成
-data/evals/                critical.json（53 例人工核对）· phi.json
+medscope/
+├── README.md
+├── pyproject.toml            # 依赖 + extras(cv/llm/gen) + slow marker 与默认 deselect
+├── Makefile                  # make test / eval（EVAL_ARGS 透传）
+├── .env.example              # 裸变量名，无前缀
+├── data/
+│   ├── samples/              # 离线切片：克隆即可零 key 跑通全流程
+│   │   ├── studies/          # 3 例研究（图 + ecgen-radiology 配对报告）
+│   │   ├── qc/               # 质控样图（正位/侧位对称性实测基线）
+│   │   └── guidelines.json   # 仲裁 RAG 语料（自行合成的教学材料，非真实指南）
+│   └── evals/
+│       ├── critical.json     # G1 金标准：53 例全人工核对（27 阳 / 26 阴）
+│       └── phi.json          # G4 夹具（由 synth_phi 注入器生成，非正则反推）
+├── src/medscope/
+│   ├── app.py                # FastAPI：/health · /studies · /workbench(页/run/dashboard/stream)
+│   ├── config.py             # pydantic-settings（危急值标签清单刻意不在这里）
+│   ├── bootstrap.py          # Deps 装配：样例 / 真实后端
+│   ├── state.py              # StudyState / Finding / Description / Disagreement / CriticalAlert
+│   ├── ontology.py           # 标签本体；CRITICAL_LABELS 是 G1 的单一真源
+│   ├── data/
+│   │   ├── openi.py          # 数据集加载与图文配对
+│   │   └── synth_phi.py      # 合成 PHI 注入器（G4 前提，必须先于 deid.py 写）
+│   ├── deid.py               # DICOM 白名单 + 文本 PHI 规则 + scan_payload（G4 评分函数）
+│   ├── qc.py                 # 图像质控 + 正位/侧位镜像对称性筛查（软告警）
+│   ├── readers/
+│   │   ├── cnn.py            # reader_a：18 类概率 + 纯 torch Grad-CAM
+│   │   └── vlm.py            # reader_b + 独立性守护 + describer 降级 + 否定式过滤
+│   ├── merge.py              # 招牌：分歧检测（presence/magnitude/unique）+ Cohen's kappa
+│   ├── arbiter.py            # 看图仲裁（chat_with_image）+ 指南 RAG，只跑分歧项
+│   ├── critical.py           # 危急值分诊，与报告撰写并行而非串在其后
+│   ├── report.py             # 四段草稿撰写，逐句挂证据
+│   ├── evidence.py           # G2 证据校验：每句结论必须引到一个带 source/prob/locus 的 Finding
+│   ├── language.py           # G3 诊断口径红线 + 免责声明强制（同时量拦截率与误伤率）
+│   ├── llm.py                # 多模态 ModelClient（OpenAI 兼容，trust_env=False 免代理）
+│   ├── guardrails/           # input(注入筛查·记录不阻断) · process(预算) · output(口径+PHI)
+│   ├── security/             # sanitize(去指令化) · redact(PII/密钥脱敏)
+│   ├── rag/                  # embed(离线哈希) · store(内存余弦) · corpus
+│   ├── graph.py              # LangGraph 编排 + 危急值并行旁路 + evidence 重试回环
+│   ├── runner.py             # 执行入口     obs.py  Langfuse 桥（无 key 时静默跳过）
+│   ├── workbench.py          # 五块面板组装 + SSE 逐节点流式
+│   ├── eval.py               # 六套件门禁 CLI（五硬一软，破线 exit 2）
+│   └── store.py              # 审计持久化（内存 / SQLite；不存 indication/history 原文）
+├── web/static/workbench.html # 零构建工作台：悬停报告句 → 图上区域与证据卡同时高亮
+├── scripts/
+│   ├── fetch_openi.py        # 数据集拉取（HTTP Range 前缀下载，1.36 GB 可只取头部）
+│   ├── build_critical_goldset.py  # G1 金标准候选生成 —— 候选须人工核对后才入库
+│   ├── calibrate_vlm.py      # reader_b 基线校准；离线模式拒绝出结论并 exit 2
+│   └── gen_phi_fixture.py    # G4 夹具生成
+├── tests/                    # pytest（352 passed, 2 deselected）+ conftest（隔离真 .env）
+├── .github/workflows/ci.yml
+├── Dockerfile                # 权重预取放在 USER app 之后，否则缓存落 root 家目录不可见
+└── docker-compose.yml
 ```
 
 ## 🧩 配置
