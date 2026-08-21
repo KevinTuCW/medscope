@@ -58,8 +58,8 @@ intake → deid → qc ─┬─(不合格)→ NEEDS_REPEAT 终止
 ```bash
 python3.12 -m venv .venv                  # torch 在 3.14 上无可靠 wheel
 .venv/bin/pip install -e ".[cv,llm]"
-PYTHONPATH=src .venv/bin/pytest -q        # 346 passed, 1 deselected
-make eval                                 # GATE: PASS
+PYTHONPATH=src .venv/bin/pytest -q        # 352 passed, 2 deselected
+make eval                                 # GATE: FAIL — G1 见「诚实的局限」
 PYTHONPATH=src .venv/bin/uvicorn medscope.app:app --reload   # → /workbench
 ```
 
@@ -93,9 +93,13 @@ PYTHONPATH=src .venv/bin/python scripts/fetch_openi.py --image-bytes 20000000
 
 保留纵隔气肿标签是刻意的：它在临床上就是危急值，**为了让指标好看而删掉它，是用重新定义标准来消灭局限**。
 
-### 金标准没有一例阳性能端到端跑
+### 纵隔气肿永远无法端到端验证
 
-53 例全部依据报告文本 + MeSH 人工核对，但**确证阳性病例的图像都不在本地那 108 张里**。G1 今天验证的是 `triage()` 的阈值、去重与本体过滤逻辑——**在 finding 已被正确识别的前提下**。它没有验证 reader_a/reader_b 能否从像素中真的检出这些征象。
+这一条不是「数据还没取到」，而是**数据不存在**。
+
+全库 3955 份报告里唯一一例非否定式的纵隔气肿是 study 895，而**它的图像不在 Open-i 的归档中**（完整 1.36 GB 图像包解压后 7470 张，3955 份报告里有 104 份因此无图可配，895 是其中之一）。所以即使拿到全量数据集，这个标签也只能停留在报告文本层面。
+
+叠加上模型侧的事实——`densenet121-res224-all` 的 18 类输出里没有纵隔气肿——**G1 对这个标签的绿灯，在现有数据与模型下不可能变成真实的端到端证据**。
 
 ### `critical_fpr` 名不副实
 

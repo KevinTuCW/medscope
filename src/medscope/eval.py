@@ -133,70 +133,103 @@ def _apply_min_cases(result: SuiteResult, min_cases: int) -> SuiteResult:
 # ---------------------------------------------------------------------------
 
 
+def _resolve_case_image(case: dict, settings: Settings) -> Path | None:
+    """Resolve a gold-set case's image pattern to a real file, if present.
+
+    `critical.json` records `image_path` as a filename *pattern*
+    (`CXR1021_*.png`) rather than a resolved path, because which images are
+    present depends on how much of the 1.36 GB Open-i archive has been
+    fetched. Resolving it per run is what keeps the suite's scope caveat
+    honest as that changes underneath us.
+
+    `rglob` returns filesystem order, so a study with both a frontal and a
+    lateral film resolves to whichever the OS hands back first. That makes
+    the measurement itself unstable and is tracked separately; this
+    function is not the place to decide which view to read.
+    """
+    pattern = case.get("image_path")
+    if not pattern:
+        return None
+    root = Path(settings.openi_root)
+    if not root.is_dir():
+        return None
+    return next(root.rglob(pattern), None)
+
+
+def _positive_case_image_exists(case: dict, settings: Settings) -> bool:
+    return _resolve_case_image(case, settings) is not None
+
+
 def run_critical_suite(
     settings: Settings | None = None,
     goldset_path: Path = CRITICAL_GOLDSET_PATH,
     min_cases: int = MIN_CASES_DEFAULT,
+    reader: Any | None = None,
 ) -> SuiteResult:
-    """Grade `medscope.critical.triage` against the hand-verified gold set.
+    """Grade critical-finding detection **end to end**: real image -> reader_a -> triage.
 
-    IMPORTANT SCOPE NOTE (see data/evals/critical.json's own metadata and
-    README.md's "诚实的局限"): no confirmed-positive case in this gold set
-    has a locally available image, so this suite cannot run the real
-    CNN/VLM against pixels. What it *can* and does validate: given that a
-    reader correctly identified a case's expected_critical label(s) (we
-    synthesize that Finding directly from the gold label, at a probability
-    safely above `critical_threshold`), does `triage()` correctly alert on
-    every one of them without dropping, mis-thresholding, or de-duplicating
-    one away? That is real, regression-catchable behaviour (see the
-    break-test in tests/test_eval.py that monkeypatches `triage` to drop a
-    Pneumothorax finding and watches this suite go red) -- it is just a
-    narrower claim than "the system detects pneumothorax in an X-ray",
-    which nothing in this repository can currently verify end to end.
+    This suite used to synthesize a `Finding` directly from each gold label
+    and grade only `triage()`'s threshold/dedup/ontology logic. That was an
+    honest claim about a narrow thing, but it could never answer the
+    question G1's name implies -- *does this system detect a pneumothorax in
+    a chest X-ray* -- because no case image was available. With the full
+    Open-i archive fetched, it now runs the real CNN over real pixels.
 
-    Pneumomediastinum's synthesized Finding uses source="vlm" (never "cnn"),
-    matching reader_a's structural inability to produce that label at all.
+    **reader_b is deliberately excluded.** The only reader_b available
+    offline is `OfflineVLMClient`, which derives its findings from each
+    study's own paired report -- the very text the gold labels were curated
+    from. Including it would be an open-book exam: the "detection" would be
+    reading the answer, and recall would look excellent while measuring
+    nothing. So this measures what reader_a alone can see, which is also the
+    honest scope given no VLM key is configured.
+
+    Two consequences follow, and both are reported rather than smoothed:
+
+    * **Pneumomediastinum cannot be detected at all.** It has no output in
+      `densenet121-res224-all`, and its single gold case (study 895) has no
+      image in the archive either. It is excluded from the runnable set and
+      named in the warnings -- not counted as a pass.
+    * **Cases with no local image are excluded from recall, never treated as
+      hits.** A case the harness could not run is not evidence of anything.
     """
     settings = settings or Settings()
     data = json.loads(goldset_path.read_text())
     cases = data["cases"]
     n_cases = len(cases)
 
+    if reader is None:
+        from medscope.readers.cnn import CNNReader
+
+        reader = CNNReader(settings)
+
     per_label_hits = {label: 0 for label in CRITICAL_LABELS}
     per_label_total = {label: 0 for label in CRITICAL_LABELS}
     missed: list[dict[str, str]] = []
+    unrunnable: list[dict[str, str]] = []
     n_negative_cases = 0
     n_false_positive_cases = 0
+    false_positive_cases: list[dict[str, Any]] = []
 
     for case in cases:
         expected: list[str] = case["expected_critical"]
+        image = _resolve_case_image(case, settings)
 
-        if expected:
-            findings = [
-                Finding(
-                    label=label,
-                    prob=0.9,
-                    source=_CRITICAL_LABEL_SOURCE.get(label, "cnn"),
-                    raw_label=label,
-                )
-                for label in expected
-            ]
-        else:
-            # FPR probe: a confident NON-critical finding must never raise
-            # an alert. This exercises triage()'s label-scoping on the
-            # gold set's real negative cases -- it is NOT a simulation of
-            # a reader over-calling a critical label (we have no data
-            # source for that), so critical_fpr measures something real
-            # but narrower than "false alarm rate in production".
-            n_negative_cases += 1
-            findings = [Finding(label="Cardiomegaly", prob=0.95, source="cnn", raw_label="Cardiomegaly")]
+        if image is None:
+            for label in expected:
+                unrunnable.append({"study_id": case["study_id"], "label": label, "reason": "no local image"})
+            continue
 
-        alerts = critical_mod.triage(findings, settings, image_ref=case.get("study_id", ""))
+        read_result = reader.read(image)
+        alerts = critical_mod.triage(read_result.findings, settings, image_ref=str(image))
         alert_labels = {a.label for a in alerts}
 
         if not expected:
+            n_negative_cases += 1
             if alert_labels:
                 n_false_positive_cases += 1
+                false_positive_cases.append(
+                    {"study_id": case["study_id"], "alerted": sorted(alert_labels)}
+                )
             continue
 
         for label in expected:
@@ -204,7 +237,13 @@ def run_critical_suite(
             if label in alert_labels:
                 per_label_hits[label] += 1
             else:
-                missed.append({"study_id": case["study_id"], "label": label})
+                missed.append(
+                    {
+                        "study_id": case["study_id"],
+                        "label": label,
+                        "note": (case.get("note") or "")[:120],
+                    }
+                )
 
     total_positive = sum(per_label_total.values())
     total_hits = sum(per_label_hits.values())
@@ -220,11 +259,28 @@ def run_critical_suite(
     if not hard_pass:
         failures.append(f"G1 critical_recall == {overall_recall!r} (must be 1.0); missed={missed}")
 
+    # Image availability is *measured*, never asserted. An earlier version
+    # hardcoded "no positive case has a locally available image" -- true when
+    # written, silently false the moment the full archive was fetched, and
+    # nothing in the gate could notice.
+    positive_cases = [c for c in cases if c.get("expected_critical")]
+    with_image = sum(1 for c in positive_cases if _positive_case_image_exists(c, settings))
+
     warnings: list[str] = [
-        "No confirmed-positive case in this gold set has a locally available image: this suite "
-        "validates triage()'s threshold/dedup/ontology logic given a correctly-identified finding, "
-        "NOT whether reader_a/reader_b would actually detect these findings from the image pixels.",
+        f"END-TO-END: recall measured by running reader_a (the CNN) over real pixels for "
+        f"{with_image}/{len(positive_cases)} confirmed-positive cases. reader_b is deliberately "
+        "excluded -- the only offline reader_b derives its findings from each study's own paired "
+        "report, i.e. the text the gold labels came from, so including it would be an open-book "
+        "exam that measures nothing."
     ]
+    if unrunnable:
+        labels = sorted({u["label"] for u in unrunnable})
+        ids = sorted({u["study_id"] for u in unrunnable})
+        warnings.append(
+            f"{len(unrunnable)} positive label-case(s) could not be run and are EXCLUDED from "
+            f"recall rather than counted as hits: studies {ids} (labels {labels}). A case the "
+            "harness could not run is not evidence of anything."
+        )
     for label, total in per_label_total.items():
         if total == 0:
             warnings.append(f"{label}: zero confirmed-positive cases in this gold set -- recall is undefined.")
@@ -239,12 +295,12 @@ def run_critical_suite(
     )
     if fpr is not None:
         warnings.append(
-            "critical_fpr is structurally 0 in this harness by construction: the negative-case probe "
-            "synthesizes a fixed non-critical Finding (Cardiomegaly), and triage()'s label-scoping "
-            "guarantees that never alerts, regardless of prob. It only ever exercises triage()'s "
-            "ontology filter, not anything resembling a real reader's false-alarm rate -- there is no "
-            "data source here for the latter (no positive case has a local image; see the scope note "
-            "above). Treat this metric as 'the label filter didn't leak', not as a calibrated FPR."
+            f"critical_fpr is now a real measurement: {n_false_positive_cases}/{n_negative_cases} "
+            "gold-set negative studies raised a critical alert when reader_a actually read their "
+            "pixels. It replaces an earlier structurally-zero probe that synthesized a fixed "
+            "non-critical finding and could only ever report 0.0. It remains soft-gated: missing a "
+            "pneumothorax can kill, over-calling one costs a radiologist thirty seconds, so recall "
+            "is the only hard requirement and these two are never combined into an F1."
         )
         if fpr > CRITICAL_FPR_SOFT_CEILING:
             warnings.append(
@@ -749,8 +805,15 @@ def run_eval(
     samples_dir: Path = SAMPLES_DIR,
     critical_goldset_path: Path = CRITICAL_GOLDSET_PATH,
     phi_fixture_path: Path = PHI_FIXTURE_PATH,
+    critical_reader: Any | None = None,
 ) -> dict[str, Any]:
-    """Run the requested suites and assemble the full gate report."""
+    """Run the requested suites and assemble the full gate report.
+
+    `critical_reader` overrides G1's reader_a. It stays None for `make
+    eval` -- the gate runs the real CNN over real pixels -- and is supplied
+    by tests that need to grade the harness deterministically rather than
+    grade the model.
+    """
     settings = settings or Settings()
     results: dict[str, SuiteResult] = {}
 
@@ -760,7 +823,9 @@ def run_eval(
         pipeline_states = run_sample_pipeline(settings, samples_dir)
 
     if "critical" in suites:
-        results["critical"] = run_critical_suite(settings, critical_goldset_path, min_cases)
+        results["critical"] = run_critical_suite(
+            settings, critical_goldset_path, min_cases, reader=critical_reader
+        )
     if "evidence" in suites:
         results["evidence"] = run_evidence_suite(pipeline_states, min_cases)
     if "language" in suites:

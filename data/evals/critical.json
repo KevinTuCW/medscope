@@ -4,7 +4,6 @@
     "n_cases": 53,
     "n_positive_cases": 27,
     "n_negative_cases": 26,
-    "n_cases_with_local_image": 8,
     "composition_by_label": {
       "Pneumothorax": {
         "positive_cases": 15,
@@ -20,7 +19,7 @@
       }
     },
     "reader_a_coverage_gap": "medscope.readers.cnn.CNNReader (densenet121-res224-all) has 18 output pathologies including Pneumothorax and Effusion, but NOTHING for pneumomediastinum (confirmed at runtime via model.pathologies in Task 1.5). reader_a structurally cannot detect Pneumomediastinum at all -- recall on that label depends entirely on reader_b (the VLM), which does not exist until Phase 2. Any G1 run against reader_a alone can only ever be evaluated on Pneumothorax and PleuralEffusion; Pneumomediastinum recall is meaningless until reader_b lands.",
-    "image_availability": "image_available_locally reflects whether the image was present in this dev sandbox's /tmp/openi_probe/imgs2 probe slice (108 images) at the time this gold set was built -- it is a fact about this local probe session, not a guarantee about the full dataset once scripts/fetch_openi.py has run against the real OpenI archive, where every report has at least one associated image. Only 8 of the 53 cases here have a locally-available image (the 3 already committed at data/samples/studies/ from Task 1.2, plus 5 more found in the probe slice); NONE of the confirmed-critical positive cases (Pneumothorax, PleuralEffusion-large, or the single Pneumomediastinum case) happen to have a local image -- every positive case in this set is verified from report text + MeSH only and cannot run end-to-end (through the real CNN) until the full dataset is fetched. image_path for entries without a local image is the expected filename pattern (CXR<study_id>_*.png), resolvable once fetched via the existing recursive image search in medscope.data.openi.",
+    "image_availability": "Deliberately not recorded here. It was, as `n_cases_with_local_image: 8` plus a per-case `image_available_locally` flag, and both became false the moment more of the 1.36 GB Open-i archive was fetched -- with nothing in the gate able to notice. medscope.eval resolves each case's `image_path` pattern against Settings.openi_root on every run and reports the measured count in its warnings instead.",
     "known_heuristic_pitfalls_discovered": [
       "Negation scope: a fixed word-lookback window clips off negation triggers that appear at the start of a list of findings (e.g. 'Negative for consolidation, effusion, or pneumothorax') -- fixed by scanning the whole sentence prefix instead.",
       "Substring false-positives: 'large' matches inside 'larger' (a laterality comparison, not a severity grade) and inside 'enlarged' (usually describing the cardiac silhouette, not an effusion) -- fixed with word-boundary regex. See studies 313 and 1957.",
@@ -33,7 +32,6 @@
     {
       "study_id": "1021",
       "image_path": "CXR1021_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "Pneumothorax"
       ],
@@ -43,7 +41,6 @@
     {
       "study_id": "1230",
       "image_path": "CXR1230_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "Pneumothorax",
         "PleuralEffusion"
@@ -54,7 +51,6 @@
     {
       "study_id": "1326",
       "image_path": "CXR1326_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "Pneumothorax"
       ],
@@ -64,7 +60,6 @@
     {
       "study_id": "1339",
       "image_path": "CXR1339_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "Pneumothorax"
       ],
@@ -74,7 +69,6 @@
     {
       "study_id": "1525",
       "image_path": "CXR1525_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "Pneumothorax",
         "PleuralEffusion"
@@ -85,7 +79,6 @@
     {
       "study_id": "1874",
       "image_path": "CXR1874_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "Pneumothorax"
       ],
@@ -95,7 +88,6 @@
     {
       "study_id": "2318",
       "image_path": "CXR2318_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "Pneumothorax"
       ],
@@ -105,7 +97,6 @@
     {
       "study_id": "2482",
       "image_path": "CXR2482_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "Pneumothorax"
       ],
@@ -115,7 +106,6 @@
     {
       "study_id": "2827",
       "image_path": "CXR2827_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "Pneumothorax"
       ],
@@ -125,7 +115,6 @@
     {
       "study_id": "3369",
       "image_path": "CXR3369_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "Pneumothorax"
       ],
@@ -135,7 +124,6 @@
     {
       "study_id": "3378",
       "image_path": "CXR3378_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "Pneumothorax"
       ],
@@ -145,7 +133,6 @@
     {
       "study_id": "3945",
       "image_path": "CXR3945_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "Pneumothorax"
       ],
@@ -155,7 +142,6 @@
     {
       "study_id": "2831",
       "image_path": "CXR2831_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "Pneumothorax"
       ],
@@ -165,7 +151,6 @@
     {
       "study_id": "91",
       "image_path": "CXR91_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "Pneumothorax"
       ],
@@ -175,7 +160,6 @@
     {
       "study_id": "124",
       "image_path": "CXR124_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "PleuralEffusion"
       ],
@@ -185,7 +169,6 @@
     {
       "study_id": "1289",
       "image_path": "CXR1289_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "PleuralEffusion"
       ],
@@ -195,7 +178,6 @@
     {
       "study_id": "145",
       "image_path": "CXR145_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "PleuralEffusion"
       ],
@@ -205,7 +187,6 @@
     {
       "study_id": "1704",
       "image_path": "CXR1704_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "PleuralEffusion"
       ],
@@ -215,7 +196,6 @@
     {
       "study_id": "2327",
       "image_path": "CXR2327_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "PleuralEffusion"
       ],
@@ -225,7 +205,6 @@
     {
       "study_id": "2752",
       "image_path": "CXR2752_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "PleuralEffusion"
       ],
@@ -235,7 +214,6 @@
     {
       "study_id": "2905",
       "image_path": "CXR2905_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "PleuralEffusion"
       ],
@@ -245,7 +223,6 @@
     {
       "study_id": "2907",
       "image_path": "CXR2907_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "PleuralEffusion"
       ],
@@ -255,7 +232,6 @@
     {
       "study_id": "3519",
       "image_path": "CXR3519_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "PleuralEffusion"
       ],
@@ -265,7 +241,6 @@
     {
       "study_id": "374",
       "image_path": "CXR374_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "PleuralEffusion"
       ],
@@ -275,7 +250,6 @@
     {
       "study_id": "423",
       "image_path": "CXR423_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "PleuralEffusion"
       ],
@@ -285,7 +259,6 @@
     {
       "study_id": "702",
       "image_path": "CXR702_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "PleuralEffusion"
       ],
@@ -295,7 +268,6 @@
     {
       "study_id": "895",
       "image_path": "CXR895_*.png",
-      "image_available_locally": false,
       "expected_critical": [
         "Pneumothorax",
         "Pneumomediastinum"
@@ -306,7 +278,6 @@
     {
       "study_id": "38",
       "image_path": "CXR38_IM-1911-1001.png",
-      "image_available_locally": true,
       "expected_critical": [],
       "source": "openi",
       "note": "Already committed at data/samples/studies/images/CXR38_IM-1911-1001.png (Task 1.2 sample). FINDINGS: 'no pneumothorax or pleural effusion.' MeSH: normal. Clean baseline negative."
@@ -314,7 +285,6 @@
     {
       "study_id": "797",
       "image_path": "CXR797_IM-2332-1001.png",
-      "image_available_locally": true,
       "expected_critical": [],
       "source": "openi",
       "note": "Already committed at data/samples/studies/images/CXR797_IM-2332-1001.png (Task 1.2 sample, the cardiomegaly case used in the CNN slow test). FINDINGS explicitly negates pneumothorax and pleural effusion. Real positive finding here is Cardiomegaly, which is NOT a critical label -- good 'abnormal but not critical' example distinct from a normal study."
@@ -322,7 +292,6 @@
     {
       "study_id": "1187",
       "image_path": "CXR1187_IM-0126-1001.png",
-      "image_available_locally": true,
       "expected_critical": [],
       "source": "openi",
       "note": "Already committed at data/samples/studies/images/CXR1187_IM-0126-1001.png (Task 1.2 sample, bilateral opacity case). FINDINGS: 'No pneumothorax or pleural effusion.' Real finding (bilateral airspace opacity) is unrelated to the 3 critical labels."
@@ -330,7 +299,6 @@
     {
       "study_id": "1211",
       "image_path": "CXR1211_IM-0142-1001.png",
-      "image_available_locally": true,
       "expected_critical": [],
       "source": "openi",
       "note": "FINDINGS: 'No pneumothorax or pleural effusion.' MeSH: normal. Image locally available in the dev probe slice."
@@ -338,7 +306,6 @@
     {
       "study_id": "3625",
       "image_path": "CXR3625_IM-1794-2001.png",
-      "image_available_locally": true,
       "expected_critical": [],
       "source": "openi",
       "note": "FINDINGS: \"There's no pneumothorax.\" MeSH: normal. Image locally available."
@@ -346,7 +313,6 @@
     {
       "study_id": "305",
       "image_path": "CXR305_IM-1420-2001.png",
-      "image_available_locally": true,
       "expected_critical": [],
       "source": "openi",
       "note": "FINDINGS: 'no pleural effusion or pneumothorax.' MeSH: Cardiomegaly/mild -- another 'real finding present, but not a critical one' case. Image locally available."
@@ -354,7 +320,6 @@
     {
       "study_id": "2616",
       "image_path": "CXR2616_*.png",
-      "image_available_locally": false,
       "expected_critical": [],
       "source": "openi",
       "note": "IMPRESSION: 'Does not appear to be a hydropneumothorax or empyema.' This is a negation my own build_critical_goldset.py heuristic initially MISSED (window-based lookback cut off 'negative for'-style triggers positioned earlier in a list; fixed to scan the whole sentence prefix -- see script comments). Real finding is a small right pleural effusion (MeSH: Pleural Effusion/right/small) -- not large, not critical. Also contains an unrelated hedge ('Cannot exclude a right lower lobe cavity') that has nothing to do with the 3 critical labels."
@@ -362,7 +327,6 @@
     {
       "study_id": "2887",
       "image_path": "CXR2887_*.png",
-      "image_available_locally": false,
       "expected_critical": [],
       "source": "openi",
       "note": "INDICATION is literally 'Right-sided pneumothorax' (prior known condition) and 'pneumothorax' appears prominently, but IMPRESSION says 'Previously identified small right pneumothorax is NOT visualized on today's exam' -- resolved since a prior study. MeSH does not code Pneumothorax at all, confirming the current study is negative. Exactly the kind of case a keyword-only extractor would misclassify as positive from the INDICATION field alone."
@@ -370,7 +334,6 @@
     {
       "study_id": "3085",
       "image_path": "CXR3085_*.png",
-      "image_available_locally": false,
       "expected_critical": [],
       "source": "openi",
       "note": "FINDINGS: 'Marrow pneumothorax, focal lung consolidation or pleural effusions.' 'Marrow' does not fit grammatically or clinically -- almost certainly OCR/transcription corruption of 'No pneumothorax, focal lung consolidation or pleural effusions.' Confirmed by IMPRESSION ('No acute cardiopulmonary abnormality') and MeSH ('No Indexing' -- no findings coded at all). Included specifically as a 'you will get bitten by this' example: a corrupted negation cue defeats keyword+negation matching entirely, and only reading the whole report plus MeSH catches it."
@@ -378,7 +341,6 @@
     {
       "study_id": "3170",
       "image_path": "CXR3170_*.png",
-      "image_available_locally": false,
       "expected_critical": [],
       "source": "openi",
       "note": "FINDINGS ends: '...Lungs are clear without evidence of fibrosis. Pleural effusions or pneumothorax. Endplate sclerotic changes...' -- an ungrammatical sentence fragment with no verb, almost certainly a mis-split continuation of the preceding negation ('without evidence of... pleural effusions or pneumothorax'). MeSH codes neither Pneumothorax nor Pleural Effusion, and IMPRESSION is clean ('No acute cardiopulmonary abnormality'). Confirms negative; another sentence-splitting/corruption pitfall."
@@ -386,7 +348,6 @@
     {
       "study_id": "1570",
       "image_path": "CXR1570_*.png",
-      "image_available_locally": false,
       "expected_critical": [],
       "source": "openi",
       "note": "FINDINGS: 'Evaluation for pneumothorax is limited due to exclusion of the superior-most pulmonary apices.' This is a technical-quality caveat, not an assertion of presence or absence -- MeSH corroborates ('Technical Quality of Image Unsatisfactory'), and the rest of the report and IMPRESSION ('No acute pulmonary disease') report nothing acute. Classified negative (no finding was actually reported), but the technical limitation is noted explicitly since 'no finding reported' is weaker ground truth than a clean negation elsewhere in this set."
@@ -394,7 +355,6 @@
     {
       "study_id": "3260",
       "image_path": "CXR3260_*.png",
-      "image_available_locally": false,
       "expected_critical": [],
       "source": "openi",
       "note": "FINDINGS: 'Cannot exclude elevation right hemidiaphragm... No evidence of pneumothorax.' The hedge ('cannot exclude') applies to hemidiaphragm elevation, NOT to any of the 3 critical labels -- pneumothorax is cleanly negated. Effusion is present (MeSH: Pleural Effusion/base/right) but with no size qualifier documented, so not counted as large/critical. Also mentions a separate pericardial effusion (MeSH: Pericardial Effusion) -- a distinct clinical entity from PleuralEffusion in this ontology, not counted."
@@ -402,7 +362,6 @@
     {
       "study_id": "343",
       "image_path": "CXR343_*.png",
-      "image_available_locally": false,
       "expected_critical": [],
       "source": "openi",
       "note": "FINDINGS: 'Cannot exclude early pulmonary edema... No visible pneumothorax.' The hedge is about pulmonary edema, not a critical label. Pneumothorax is cleanly negated; effusion is mentioned in a garbled fragment ('Two airspace consolidation or effusion') that MeSH does not corroborate (no Pleural Effusion MeSH term at all) -- likely another transcription artifact, treated as negative."
@@ -410,7 +369,6 @@
     {
       "study_id": "3001",
       "image_path": "CXR3001_*.png",
-      "image_available_locally": false,
       "expected_critical": [],
       "source": "openi",
       "note": "IMPRESSION: 'Cannot exclude small pleural effusions.' Textbook hedge language (matches the exact style flagged in the task spec), and explicitly 'small' even if present -- not critical either way."
@@ -418,7 +376,6 @@
     {
       "study_id": "2441",
       "image_path": "CXR2441_*.png",
-      "image_available_locally": false,
       "expected_critical": [],
       "source": "openi",
       "note": "IMPRESSION: 'Possible small right pleural effusion, without focal consolidation or pneumothorax.' Hedge ('possible') + explicitly small, and pneumothorax is negated in the same sentence."
@@ -426,7 +383,6 @@
     {
       "study_id": "576",
       "image_path": "CXR576_IM-2174-1001.png",
-      "image_available_locally": true,
       "expected_critical": [],
       "source": "openi",
       "note": "IMPRESSION: 'Right pleural effusion with adjacent atelectasis.' A real, persistent effusion, but no size qualifier is ever given in FINDINGS, IMPRESSION, or MeSH (just 'Pleural Effusion/right', no size) -- not documented as large, so not counted as critical. Image locally available. Good example of 'real finding present, but severity insufficient for the critical gate.'"
@@ -434,7 +390,6 @@
     {
       "study_id": "650",
       "image_path": "CXR650_IM-2228-4001.png",
-      "image_available_locally": true,
       "expected_critical": [],
       "source": "openi",
       "note": "IMPRESSION: 'Moderate right-sided pleural effusion' (+ small left-sided). MeSH: Pleural Effusion/right/moderate, Pleural Effusion/left/small. 'Moderate' is explicitly below this gold set's 'large' bar for critical severity. Pneumothorax explicitly negated ('No pneumothorax'). Image locally available."
@@ -442,7 +397,6 @@
     {
       "study_id": "649",
       "image_path": "CXR649_*.png",
-      "image_available_locally": false,
       "expected_critical": [],
       "source": "openi",
       "note": "FINDINGS: 'The left apical pneumothorax has resolved.' IMPRESSION: 'resolution of small apical pneumothorax.' MeSH codes no Pneumothorax at all. A clean 'was present historically, resolved by the time of this study' case -- current study is negative despite 'pneumothorax' appearing twice."
@@ -450,7 +404,6 @@
     {
       "study_id": "313",
       "image_path": "CXR313_*.png",
-      "image_available_locally": false,
       "expected_critical": [],
       "source": "openi",
       "note": "FINDINGS: 'There are small pleural effusions, right larger than left.' This is a laterality comparison ('right LARGER than left'), not a severity grade -- and it caught a real bug in my own build_critical_goldset.py heuristic, which originally matched 'large' as a substring of 'larger' (and separately of 'enlarged') and misclassified this as large-severity. Fixed to use word-boundary regex matching. MeSH confirms: Pleural Effusion/bilateral/small -- genuinely small, not critical. Kept in the set specifically to document this pitfall."
@@ -458,7 +411,6 @@
     {
       "study_id": "1957",
       "image_path": "CXR1957_*.png",
-      "image_available_locally": false,
       "expected_critical": [],
       "source": "openi",
       "note": "Same 'larger than' substring trap as study 313: 'Bilateral pleural effusions, right larger than left.' MeSH: Pleural Effusion/left/small, Pleural Effusion/right/moderate -- moderate at most, not large, not critical."
@@ -466,7 +418,6 @@
     {
       "study_id": "1705",
       "image_path": "CXR1705_*.png",
-      "image_available_locally": false,
       "expected_critical": [],
       "source": "openi",
       "note": "FINDINGS: 'Negative for pneumothorax, pneumomediastinum, or pleural effusion.' Clean list-negation covering all 3 critical labels in one sentence. MeSH: normal."
@@ -474,7 +425,6 @@
     {
       "study_id": "197",
       "image_path": "CXR197_*.png",
-      "image_available_locally": false,
       "expected_critical": [],
       "source": "openi",
       "note": "FINDINGS: 'No pneumothorax or pneumomediastinum.' MeSH does not code either. Clean negative for the two labels this report discusses (does not mention pleural effusion at all, so that label is simply absent from this report, not asserted negative)."
@@ -482,7 +432,6 @@
     {
       "study_id": "2145",
       "image_path": "CXR2145_*.png",
-      "image_available_locally": false,
       "expected_critical": [],
       "source": "openi",
       "note": "FINDINGS: 'There is no pneumothorax or pneumomediastinum.' MeSH: normal. Clean negative."
@@ -490,7 +439,6 @@
     {
       "study_id": "3657",
       "image_path": "CXR3657_*.png",
-      "image_available_locally": false,
       "expected_critical": [],
       "source": "openi",
       "note": "FINDINGS: 'No pneumothorax or pneumomediastinum.' Clean negative; also explicitly negates effusion ('No effusion or infiltrate')."
@@ -498,7 +446,6 @@
     {
       "study_id": "3639",
       "image_path": "CXR3639_*.png",
-      "image_available_locally": false,
       "expected_critical": [],
       "source": "openi",
       "note": "Both FINDINGS ('There is no evidence of pneumomediastinum or pneumothorax... There are no large pleural effusions') AND IMPRESSION ('No evidence of pneumothorax or pneumomediastinum') independently confirm all 3 critical labels negative -- the strongest double-confirmation negative in the set, and notably the ONE report in the whole corpus that explicitly qualifies effusion size ('no LARGE pleural effusions') the same way this gold set does."
@@ -506,7 +453,6 @@
     {
       "study_id": "2467",
       "image_path": "CXR2467_*.png",
-      "image_available_locally": false,
       "expected_critical": [],
       "source": "openi",
       "note": "INDICATION: 'History of recent pneumomediastinum.' This is patient history, not a finding on THIS study -- FINDINGS for this exam describes unrelated small lung nodules and does not re-affirm or re-examine the mediastinum for pneumomediastinum at all. Classified negative for this study (no current finding reported), while flagging that this is exactly the kind of report where a keyword-only extractor would wrongly fire on the word 'pneumomediastinum' appearing prominently in INDICATION."

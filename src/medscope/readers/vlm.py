@@ -193,10 +193,16 @@ _OUTPUT_INSTRUCTIONS = (
     "Look at the chest X-ray image and report every finding you observe, "
     "independently -- you have not seen and must not ask for any other "
     "reader's output.\n\n"
+    "Report only what you observe to be PRESENT. Do not list findings you "
+    "have ruled out, and do not report a structure as normal or clear -- an "
+    "absence is not a finding.\n\n"
     "Reply with only a JSON array, one object per finding, each with:\n"
-    '  "label": the finding name, in English or Chinese. Do not force it '
-    "onto a fixed pathology list -- report exactly what you see, including "
-    "findings outside typical chest X-ray labels.\n"
+    '  "label": the finding name ON ITS OWN, in English or Chinese -- no '
+    "side, no severity, no negation mixed into it. Do not force it onto a "
+    "fixed pathology list -- report exactly what you see, including findings "
+    "outside typical chest X-ray labels.\n"
+    '  "laterality": optional, which side the finding is on, if it has one.\n'
+    '  "severity": optional, how marked it is, in words.\n'
     '  "confidence": one hedging word for how sure you are -- for example '
     "certain/definite, probable/likely, or possible/cannot exclude (or the "
     "Chinese equivalents, e.g. 确定/怀疑/不除外). Do not invent a numeric "
@@ -384,15 +390,83 @@ def _normalize_payload(obj) -> list[dict]:
     return []
 
 
+# A real VLM reports what it ruled out alongside what it saw ("no
+# pneumothorax", "normal lung fields"). Those are not findings: parsed as
+# Findings they assert presence at whatever confidence the model attached
+# to its own negation.
+_NEGATION_RE = re.compile(
+    r"^(no|not|without|negative for|free of|clear of|absence of|absent|"
+    r"normal|unremarkable)\b"
+    r"|^(未见|未发现|未及|无|没有|阴性)",
+    re.I,
+)
+
+# Stripped only as a fallback when the whole label doesn't canonicalize.
+# Side and severity belong in their own fields per the prompt; this is the
+# net for when the model puts them in the label anyway.
+_QUALIFIERS = frozenset(
+    {
+        "left", "right", "bilateral", "biapical", "apical", "basal", "basilar",
+        "upper", "lower", "mid", "middle", "zone", "lobe", "sided",
+        "mild", "moderate", "severe", "small", "large", "minimal", "trace",
+        "slight", "marked", "massive", "tiny", "extensive", "subtle", "possible",
+    }
+)
+_CJK_QUALIFIER_RE = re.compile(
+    r"(左侧|右侧|双侧|两侧|左|右|双|轻度|中度|重度|少量|中量|大量|微量|明显|轻微)"
+)
+
+
+def _is_negated(raw_label: str) -> bool:
+    return _NEGATION_RE.search(raw_label.strip()) is not None
+
+
+def _canonicalize_label(raw_label: str) -> str | None:
+    """`canonical()`, retried with side/severity qualifiers stripped.
+
+    Returns None when neither attempt maps -- an unmapped label is the
+    high-value "one reader saw something outside the other's vocabulary"
+    case and must stay unmapped rather than be forced onto a near-miss.
+    """
+    direct = canonical(raw_label)
+    if direct is not None:
+        return direct
+
+    tokens = re.split(r"[\s\-_/,]+", raw_label.strip())
+    kept = [t for t in tokens if t and t.lower().strip(".") not in _QUALIFIERS]
+    if kept and len(kept) != len(tokens):
+        retry = canonical(" ".join(kept))
+        if retry is not None:
+            return retry
+
+    stripped_cjk = _CJK_QUALIFIER_RE.sub("", raw_label)
+    if stripped_cjk and stripped_cjk != raw_label:
+        return canonical(stripped_cjk)
+    return None
+
+
 def _finding_from_item(item: dict) -> Finding | None:
     """Build one Finding from a parsed JSON item. Returns None (not raised)
     for an item with no usable label, so one bad entry in a list doesn't
-    take down the rest of the reply."""
+    take down the rest of the reply -- and now also for an item that
+    asserts an ABSENCE rather than a finding (see `_is_negated`).
+
+    The prompt asks for a bare label with side and severity in their own
+    fields, but a real model complies only most of the time, so
+    `_canonicalize_label` retries qualifier-stripped. Negation is decided
+    first and is never subject to that retry: stripping "large"/"left" off
+    "no large left pleural effusion" would otherwise canonicalize a
+    ruled-out finding into a critical alert.
+    """
     raw = item.get("label")
     if not isinstance(raw, str) or not raw.strip():
         return None
     raw_label = raw.strip()
-    label = canonical(raw_label)
+
+    if item.get("negated") is True or _is_negated(raw_label):
+        return None
+
+    label = _canonicalize_label(raw_label)
 
     notes: list[str] = []
     description = item.get("description")

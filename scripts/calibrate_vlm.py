@@ -48,6 +48,7 @@ import argparse
 import json
 import statistics
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -56,6 +57,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from medscope.config import Settings  # noqa: E402
 from medscope.data.openi import load_studies  # noqa: E402
 from medscope.merge import merge_reads  # noqa: E402
+from medscope.ontology import canonical  # noqa: E402
 from medscope.readers.cnn import CNNReader  # noqa: E402
 from medscope.readers.vlm import OfflineVLMClient, build_vlm_client, read_b  # noqa: E402
 from medscope.state import StudyState  # noqa: E402
@@ -130,11 +132,31 @@ def main() -> None:
         _findings, disagreements, kappa = merge_reads(
             read_a_result, read_b_result, settings.cnn_prob_threshold, mode="reader"
         )
+        # `n_disagreements` alone hid a structural defect for a whole
+        # calibration run: every disagreement was `unique` (a label only one
+        # reader named) and not one was a head-to-head `presence` or
+        # `magnitude` conflict, meaning the two readers never actually
+        # compared anything. A single count can't show that, so the kind
+        # breakdown and reader_b's raw labels are recorded per study.
+        by_kind = Counter(d.kind for d in disagreements)
+        # Labels BOTH readers landed on -- counted whether they then agreed
+        # or conflicted. Counting only `presence`/`magnitude` disagreements
+        # would report zero comparisons for a study where the two readers
+        # matched on two labels and agreed on both.
+        shared = {canonical(f.label) for f in read_a_result.findings} & {
+            canonical(f.label) for f in read_b_result.findings
+        }
+        shared.discard(None)
         per_study.append(
             {
                 "study_id": study.study_id,
                 "kappa": kappa,
                 "n_disagreements": len(disagreements),
+                "disagreements_by_kind": dict(by_kind),
+                "n_shared_labels": len(shared),
+                "shared_labels": sorted(shared),
+                "reader_b_labels": [f.label for f in read_b_result.findings],
+                "reader_b_raw_labels": [f.raw_label for f in read_b_result.findings],
             }
         )
 
@@ -146,6 +168,18 @@ def main() -> None:
     print(f"Mean Cohen's kappa: {mean_kappa:.3f}")
     print(f"Mean disagreements per study: {mean_disagreements:.3f}")
     print(f"Share of studies with >= 1 disagreement (disagreement_rate): {share_with_disagreement:.1%}")
+
+    # Surfaced in the summary, not just the JSON: if this is 0, the two
+    # readers never landed on the same label and neither statistic above is
+    # a statement about the model.
+    total_shared = sum(s["n_shared_labels"] for s in per_study)
+    print(f"Labels both readers named (agreeing or not): {total_shared}")
+    if total_shared == 0:
+        print(
+            "  WARNING: not one label was called by both readers. kappa and "
+            "disagreement_rate above describe the label vocabularies, not "
+            "reader_b's quality -- do not decide reader_b_mode from this run."
+        )
 
     result = {
         "generated_at": datetime.now(timezone.utc).isoformat(),

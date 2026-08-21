@@ -97,11 +97,24 @@ def _merge_reader(
         fa = a_mapped.get(label)
         fb = b_mapped.get(label)
 
+        # A label only one reader mentioned is a `unique` disagreement only
+        # if that reader actually CALLED it. The two readers are
+        # structurally asymmetric: reader_a emits a Finding for every label
+        # its model knows (most of them confident negatives), while reader_b
+        # names only what it saw. Treating each unmentioned negative as a
+        # conflict produced ~17 per study against a real VLM -- see
+        # test_one_sided_negative_call_is_agreement_not_a_unique_disagreement.
         if fa is None:
-            disagreements.append(Disagreement(label=label, a_prob=None, b_prob=fb.prob, kind="unique"))
+            if fb.prob >= threshold:
+                disagreements.append(Disagreement(label=label, a_prob=None, b_prob=fb.prob, kind="unique"))
+            else:
+                findings.append(fb)
             continue
         if fb is None:
-            disagreements.append(Disagreement(label=label, a_prob=fa.prob, b_prob=None, kind="unique"))
+            if fa.prob >= threshold:
+                disagreements.append(Disagreement(label=label, a_prob=fa.prob, b_prob=None, kind="unique"))
+            else:
+                findings.append(fa)
             continue
 
         a_pos = fa.prob >= threshold
@@ -127,6 +140,20 @@ def _merge_reader(
     positive_a = {label for label, f in a_mapped.items() if f.prob >= threshold}
     positive_b = {label for label, f in b_mapped.items() if f.prob >= threshold}
     universe = set(a_mapped) | set(b_mapped)
+
+    if b_unmapped and not b_mapped:
+        # reader_b judged, but every label it produced fell outside the
+        # shared vocabulary, so the universe is reader_a's alone and both
+        # positive sets are trivially comparable. cohens_kappa would take
+        # its degenerate branch and report 1.0 -- perfect agreement from a
+        # reader that never once agreed with anything (observed against a
+        # real VLM returning "right rib fracture", "no pleural effusion",
+        # ...). `kappa_floor` is what decides whether reader_b stays a peer,
+        # so this reports no measurable agreement rather than total
+        # agreement. It is not a computed kappa and does not pretend to be;
+        # the reason is recorded per-study by scripts/calibrate_vlm.py.
+        return findings, disagreements, 0.0
+
     kappa, _note = cohens_kappa(positive_a, positive_b, universe)
 
     return findings, disagreements, kappa

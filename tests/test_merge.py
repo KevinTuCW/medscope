@@ -182,6 +182,61 @@ def test_unmapped_labels_from_both_readers_never_cross_matched():
     assert all(d.kind == "unique" for d in disagreements)
 
 
+def test_one_sided_negative_call_is_agreement_not_a_unique_disagreement():
+    # The readers are structurally asymmetric: CNNReader.read emits a
+    # Finding for every one of the model's labels, including the ones it
+    # confidently calls absent, while reader_b only names what it saw.
+    # Scoring "reader_a says Hernia 0.02, reader_b never mentioned Hernia"
+    # as a disagreement makes ~17 of them per study for any VLM, which
+    # (a) floods the arbiter's max_llm_judgments budget with non-events and
+    # (b) pins disagreement_rate at 1.0, making the reader/describer
+    # demotion rule in scripts/calibrate_vlm.py impossible to pass. Two
+    # readers who both decline to call a label are agreeing it is absent.
+    read_a = _read("a", [_finding("Hernia", 0.02)])
+    read_b = _read("b", [])
+
+    findings, disagreements, _ = merge_reads(read_a, read_b, THRESHOLD)
+
+    assert disagreements == []
+    assert len(findings) == 1
+    assert findings[0].label == "Hernia"
+    assert findings[0].prob == 0.02
+
+
+def test_one_sided_positive_call_is_still_a_unique_disagreement():
+    # The other half of the rule above: a label one reader called POSITIVE
+    # and the other never mentioned is a real conflict, and must stay one.
+    read_a = _read("a", [_finding("Hernia", 0.6)])
+    read_b = _read("b", [])
+
+    _findings, disagreements, _ = merge_reads(read_a, read_b, THRESHOLD)
+
+    assert [d.kind for d in disagreements] == ["unique"]
+
+
+def test_kappa_is_not_perfect_when_reader_b_named_nothing_mappable():
+    # Observed against a real VLM: reader_b returned nine free-text labels
+    # ("right rib fracture", "no pleural effusion", ...), none of which
+    # canonical() could map. b_mapped is then empty, so the universe comes
+    # entirely from reader_a, both positive sets are empty, and
+    # cohens_kappa's degenerate branch reports 1.0 -- perfect agreement
+    # from a reader that never once agreed with anything. kappa_floor is
+    # what decides whether reader_b stays a peer, so this must not read as
+    # agreement.
+    read_a = _read("a", [_finding("Pneumothorax", 0.05), _finding("Effusion", 0.1)])
+    read_b = _read(
+        "b",
+        [
+            _finding("right rib fracture", 0.9, source="vlm"),
+            _finding("no pleural effusion", 0.9, source="vlm"),
+        ],
+    )
+
+    _findings, _disagreements, kappa = merge_reads(read_a, read_b, THRESHOLD)
+
+    assert kappa != 1.0
+
+
 # ---------------------------------------------------------------------------
 # merge_reads, mode="describer"
 # ---------------------------------------------------------------------------

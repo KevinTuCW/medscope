@@ -266,3 +266,57 @@ def test_read_b_populates_tokens_and_latency():
 
     assert result.tokens == 42
     assert result.latency_ms >= 0
+
+
+# -- read_b: what a real VLM actually returns --
+#
+# Every case below is a verbatim label observed from
+# Qwen/Qwen3-VL-32B-Instruct reading real Open-i studies. A Finding
+# asserts presence at a probability; none of these should become one
+# unchanged.
+
+
+def test_read_b_drops_negated_observations_instead_of_asserting_them():
+    # Observed: the model lists what it ruled OUT alongside what it saw.
+    # Parsed as-is these become Findings at prob 0.9 whose label reads as
+    # an absence -- a "finding" asserting 90% confidence in nothing.
+    text = json.dumps(
+        [
+            {"label": "no pneumothorax", "confidence": "certain"},
+            {"label": "normal lung fields", "confidence": "certain"},
+            {"label": "Cardiomegaly", "confidence": "certain"},
+        ]
+    )
+    result = read_b(_plain_state(), _StubClient(text), Settings())
+
+    assert [f.label for f in result.findings] == ["Cardiomegaly"]
+
+
+def test_read_b_honours_an_explicit_negated_flag():
+    text = json.dumps([{"label": "Pneumothorax", "confidence": "certain", "negated": True}])
+    result = read_b(_plain_state(), _StubClient(text), Settings())
+
+    assert result.findings == []
+
+
+def test_read_b_canonicalizes_a_label_carrying_laterality_and_severity():
+    # Observed: "mild bilateral pleural effusion". canonical() can't map it,
+    # so the label stays raw -- and triage() filters on
+    # `label not in CRITICAL_LABELS`, meaning reader_b could never raise a
+    # critical alert for an effusion it plainly saw.
+    text = json.dumps([{"label": "mild bilateral pleural effusion", "confidence": "probable"}])
+    result = read_b(_plain_state(), _StubClient(text), Settings())
+
+    assert [f.label for f in result.findings] == ["PleuralEffusion"]
+    assert result.findings[0].raw_label == "mild bilateral pleural effusion"
+
+
+def test_read_b_qualifier_stripping_never_resurrects_a_negation():
+    # The dangerous interaction: strip "left"/"large" off a label to make it
+    # canonicalize, and "no left pleural effusion" would canonicalize too --
+    # turning a ruled-out finding into a critical alert. Negation must be
+    # decided before any qualifier is stripped.
+    text = json.dumps([{"label": "no large left pleural effusion", "confidence": "certain"}])
+    result = read_b(_plain_state(), _StubClient(text), Settings())
+
+    assert result.findings == []

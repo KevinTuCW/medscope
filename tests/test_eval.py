@@ -16,6 +16,8 @@ Structure:
 from __future__ import annotations
 
 import json
+import re
+from fnmatch import fnmatch
 from pathlib import Path
 
 import pytest
@@ -27,6 +29,7 @@ from medscope import language as language_mod
 from medscope.config import Settings
 from medscope.eval import (
     CRITICAL_FPR_SOFT_CEILING,
+    CRITICAL_GOLDSET_PATH,
     INJECTION_FIXTURE,
     REDLINE_FIXTURE,
     main,
@@ -38,7 +41,7 @@ from medscope.eval import (
     run_phi_suite,
     run_robustness_suite,
 )
-from medscope.state import Finding, ReportDraft, ReportSentence, StudyState
+from medscope.state import Finding, ReadResult, ReportDraft, ReportSentence, StudyState
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -49,9 +52,74 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def _write_critical_goldset(tmp_path: Path, cases: list[dict]) -> Path:
+    """Write a fixture gold set AND the image files its patterns resolve to.
+
+    The images matter: `run_critical_suite` resolves each case's
+    `image_path` pattern against `Settings.openi_root` and skips a case
+    whose image is missing. Without a self-contained image directory these
+    fixture patterns (`CXR1_*.png` ... `CXR5_*.png`) glob against the real
+    Open-i archive, where `CXR1_IM-0001-3001.png` really exists -- so a
+    "small, hand-built fixture independent of the real corpora" silently
+    started reading real pixels with the real CNN. Pair with
+    `_settings_for(tmp_path)` so the glob can only see these files.
+
+    The files are empty on purpose: the tests using them inject
+    `_GoldLabelReader`, which never opens them.
+    """
+    images = tmp_path / "images"
+    images.mkdir(exist_ok=True)
+    for case in cases:
+        (images / case["image_path"].replace("*", "IM-0001")).write_bytes(b"")
     path = tmp_path / "critical.json"
     path.write_text(json.dumps({"metadata": {"note": "test fixture"}, "cases": cases}))
     return path
+
+
+def _settings_for(tmp_path: Path) -> Settings:
+    return Settings(openi_root=tmp_path)
+
+
+class _GoldLabelReader:
+    """A reader_a stand-in returning exactly the gold labels for a case.
+
+    These tests are about the *harness*: does `triage()` alert on every
+    critical label handed to it without dropping, mis-thresholding or
+    de-duplicating one away, and does the suite account for the result
+    honestly? That is answered by feeding known-correct findings in, and it
+    is a different question from "can the CNN see a pneumothorax in this
+    image" -- which is what `make eval` measures, by running the real
+    `CNNReader` over the real gold set. Keeping the model out of here is
+    what keeps the fast suite deterministic and weight-free.
+
+    Negative cases get a confident NON-critical finding, so `critical_fpr`
+    exercises triage()'s ontology filter instead of being undefined.
+    """
+
+    def __init__(self, cases: list[dict]):
+        # Matched by the case's own glob pattern, not by a reconstructed
+        # filename: the real archive resolves `CXR1021_*.png` to something
+        # like `CXR1021_IM-0013-1001.png`, which no naming convention here
+        # could guess.
+        self._patterns = [(case["image_path"], case["expected_critical"]) for case in cases]
+
+    def read(self, image_path) -> ReadResult:
+        name = Path(image_path).name
+        labels: list[str] = next(
+            (expected for pattern, expected in self._patterns if fnmatch(name, pattern)), []
+        )
+        if labels:
+            findings = [
+                Finding(
+                    label=label,
+                    prob=0.9,
+                    source="vlm" if label == "Pneumomediastinum" else "cnn",
+                    raw_label=label,
+                )
+                for label in labels
+            ]
+        else:
+            findings = [Finding(label="Cardiomegaly", prob=0.95, source="cnn", raw_label="Cardiomegaly")]
+        return ReadResult(reader="a", findings=findings, latency_ms=0)
 
 
 def _critical_case(study_id: str, expected: list[str]) -> dict:
@@ -143,7 +211,9 @@ def _bare_assertion_state(study_id: str = "bad1") -> StudyState:
 
 def test_critical_suite_computes_recall_and_per_label_breakdown(tmp_path):
     goldset = _write_critical_goldset(tmp_path, SMALL_CRITICAL_CASES)
-    result = run_critical_suite(Settings(), goldset_path=goldset, min_cases=1)
+    result = run_critical_suite(
+        _settings_for(tmp_path), goldset_path=goldset, min_cases=1, reader=_GoldLabelReader(SMALL_CRITICAL_CASES)
+    )
 
     assert result.metrics["critical_recall"] == 1.0
     assert result.passed is True
@@ -160,8 +230,11 @@ def test_critical_suite_computes_recall_and_per_label_breakdown(tmp_path):
 def test_critical_suite_reports_coverage_caveat():
     # Uses the REAL gold set -- confirms the honest-accounting requirement
     # (per-label breakdown + coverage caveat) survives against the actual
-    # data/evals/critical.json, not just a synthetic fixture.
-    result = run_critical_suite(Settings())
+    # data/evals/critical.json, not just a synthetic fixture. The reader is
+    # still stubbed: what is under test is the suite's accounting of the
+    # real corpus, not the CNN's eyesight.
+    cases = json.loads(CRITICAL_GOLDSET_PATH.read_text())["cases"]
+    result = run_critical_suite(Settings(), reader=_GoldLabelReader(cases))
     assert result.n_cases >= 50
     by_label = result.metrics["critical_recall_by_label"]
     assert set(by_label) == {"Pneumothorax", "PleuralEffusion", "Pneumomediastinum"}
@@ -169,7 +242,12 @@ def test_critical_suite_reports_coverage_caveat():
     joined_warnings = " ".join(result.warnings)
     assert "Pneumomediastinum" in joined_warnings
     assert "reader_b" in joined_warnings
-    assert "NOT whether reader_a/reader_b would actually detect" in joined_warnings
+    # Image coverage must be *measured and shown*, never a fixed sentence:
+    # the previous hardcoded "no confirmed-positive case has a locally
+    # available image" became false the moment the full archive was fetched
+    # and nothing in the gate could notice. Requiring the ratio in the text
+    # is what makes the caveat track reality instead of restating history.
+    assert re.search(r"\d+/\d+ confirmed-positive cases", joined_warnings)
 
 
 def test_evidence_suite_clean_draft_passes():
@@ -238,7 +316,9 @@ def test_G1_critical_gate_reddens_when_triage_drops_pneumothorax(tmp_path, monke
     goldset = _write_critical_goldset(tmp_path, SMALL_CRITICAL_CASES)
 
     # Sanity check first: unpatched, this exact fixture is green.
-    baseline = run_critical_suite(Settings(), goldset_path=goldset, min_cases=1)
+    reader = _GoldLabelReader(SMALL_CRITICAL_CASES)
+    settings = _settings_for(tmp_path)
+    baseline = run_critical_suite(settings, goldset_path=goldset, min_cases=1, reader=reader)
     assert baseline.passed is True
     assert baseline.metrics["critical_recall"] == 1.0
 
@@ -250,7 +330,7 @@ def test_G1_critical_gate_reddens_when_triage_drops_pneumothorax(tmp_path, monke
 
     monkeypatch.setattr(critical_mod, "triage", _triage_that_drops_pneumothorax)
 
-    broken = run_critical_suite(Settings(), goldset_path=goldset, min_cases=1)
+    broken = run_critical_suite(settings, goldset_path=goldset, min_cases=1, reader=reader)
 
     assert broken.passed is False
     assert broken.metrics["critical_recall"] < 1.0
@@ -258,7 +338,13 @@ def test_G1_critical_gate_reddens_when_triage_drops_pneumothorax(tmp_path, monke
     assert broken.metrics["critical_recall_by_label"]["PleuralEffusion"] == 1.0  # untouched label unaffected
     assert any("critical_recall" in f for f in broken.failures)
 
-    report = run_eval(suites=("critical",), min_cases=1, critical_goldset_path=goldset)
+    report = run_eval(
+        suites=("critical",),
+        settings=settings,
+        min_cases=1,
+        critical_goldset_path=goldset,
+        critical_reader=reader,
+    )
     assert report["gate_pass"] is False
     assert "critical" in report["hard_failures"]
 
@@ -415,7 +501,9 @@ def test_G5_robustness_invariance_gate_reddens_when_qc_becomes_perturbation_sens
 
 def test_min_cases_fails_a_small_critical_corpus(tmp_path):
     goldset = _write_critical_goldset(tmp_path, SMALL_CRITICAL_CASES)  # 5 cases
-    result = run_critical_suite(Settings(), goldset_path=goldset, min_cases=1000)
+    result = run_critical_suite(
+        _settings_for(tmp_path), goldset_path=goldset, min_cases=1000, reader=_GoldLabelReader(SMALL_CRITICAL_CASES)
+    )
     assert result.passed is False
     assert any("corpus too small" in f for f in result.failures)
 
@@ -456,7 +544,12 @@ def test_main_exits_2_on_hard_failure(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_full_report_carries_per_label_critical_breakdown(tmp_path, monkeypatch):
+    # `main` takes no reader override on purpose -- it is the CLI the gate
+    # actually runs, so this exercises the real CNN over the real gold set
+    # and costs ~10 minutes. That is what the `slow` marker is for; the
+    # harness-level assertions live in the stubbed tests above.
     monkeypatch.chdir(Path(__file__).parent.parent)
     report_path = tmp_path / "report.json"
     main(["--suite", "critical", "--report-path", str(report_path)])
