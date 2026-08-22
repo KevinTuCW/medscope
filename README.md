@@ -12,7 +12,7 @@
 [![Qwen3-VL](https://img.shields.io/badge/reader__b-Qwen3--VL--32B-6B46C1.svg)](https://github.com/QwenLM/Qwen3-VL)
 [![Langfuse](https://img.shields.io/badge/Langfuse-tracing-fbbf24.svg)](https://langfuse.com/)
 [![CI](https://img.shields.io/badge/CI-tests%20%2B%20eval%20gate-2088FF.svg?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
-[![tests](https://img.shields.io/badge/tests-386%20passed-brightgreen.svg)](#-评测)
+[![tests](https://img.shields.io/badge/tests-395%20passed-brightgreen.svg)](#-评测)
 [![PHI leaks](https://img.shields.io/badge/PHI%20leaks-0-brightgreen.svg)](#-评测)
 [![gate](https://img.shields.io/badge/eval%20gate-PASS%20%C2%B7%20AUC%200.659-yellow.svg)](#-评测)
 
@@ -129,7 +129,7 @@ python3.12 -m venv .venv                  # torch 在 3.14 上无可靠 wheel
 .venv/bin/pip install -e ".[cv,llm]"
 
 # 2. 跑测试（离线、hermetic、零 key）
-PYTHONPATH=src .venv/bin/pytest -q        # 386 passed, 3 deselected in ~80s
+PYTHONPATH=src .venv/bin/pytest -q        # 395 passed, 3 deselected in ~85s
 PYTHONPATH=src .venv/bin/pytest -m slow   # 2 个真权重用例 + 1 个真 DICOM 用例（无片则跳过）
 
 # 3. 跑评测门禁
@@ -210,7 +210,7 @@ make eval        # 或 EVAL_ARGS="--suite critical" make eval
 | `robustness` **G5 鲁棒性** | **硬门** | 注入拦截率 = 1.0，不变性 = 1.0 | ✅ PASS (n=9) |
 | `golden` | soft | 端到端产出完整度 | ✅ PASS (n=3) |
 
-单测：**386 passed, 3 deselected**（`slow` 标记的真权重用例默认不跑）。
+单测：**395 passed, 3 deselected**（`slow` 标记的真权重用例默认不跑）。
 
 ### 一条原则
 
@@ -344,7 +344,37 @@ make eval        # 或 EVAL_ARGS="--suite critical" make eval
 - **仲裁预算被打满**：`max_llm_judgments = 12`，而实测每份研究 12.35 条分歧——几乎每一份都会触到上限，也就是说总有分歧没被仲裁到（它们会带着 `needs_human` 留在最终集合里，不是被悄悄丢掉）。
 - **G1 那个「FPR 没变」要读准范围**：金标准上没变的是**三个危急标签**的告警率；跨全部 18 个标签，读全视图把阳性数翻了三倍。侧位片喂进正位模型的乱报（实测 47 张里 40 张误报气胸）就落在这三倍里。**这是 ① 那次改动的代价，而 G1 的指标看不见它。**
 
-所以下一步不是接着调 `reader_b`，而是先决定合并层要不要按视图或按标签集收窄比对范围——在那之前，kappa 量的是两个看着不同东西的读者。
+### 按标签集收窄：假设被自己的数据否掉了
+
+上一节的怀疑是「kappa 量的是两个看着不同东西的读者」，于是把比对范围收窄到两个读者都能开口的标签（`ontology.COMPARISON_LABELS`），用真 VLM 重跑同样 40 份。**结果与预期相反：**
+
+| | 全部映射标签 | **收窄到比对词表** |
+| --- | --- | --- |
+| mean kappa | −0.030 | **−0.092（更差）** |
+| 分歧 / 研究 | 12.08 | 其中「两读者都开了口」的只有 **3.38** |
+
+原因在这张表里：
+
+| 词表内标签 | reader_a 叫阳性 | reader_b 命名 |
+| --- | --- | --- |
+| LungOpacity | **40/40** | 3/40 |
+| Pneumothorax | 31/40 | 3/40 |
+| Fracture | 21/40 | 3/40 |
+| Pneumonia | 19/40 | 0/40 |
+| PleuralEffusion | 12/40 | 2/40 |
+| **Cardiomegaly** | **6/40** | **18/40** |
+
+**两个读者不是在各说各话，是在正面对着干**：reader_b 最常报的心影增大，reader_a 只有 6/40 认；reader_a 每张片都报的肺部阴影，reader_b 总共只提 3 次。收窄之所以让 kappa 更难看，是因为小词表里双方各自把不同标签叫成阳性，偶然一致率被抬高，kappa 惩罚得更狠——**收窄拿掉的正是「他们在谈不同的事」这个借口**。
+
+所以这次改动的产出不是一个更好的数字，而是三样东西：
+
+- **一个被证伪的假设**。分歧不是词表错配造成的。`reader_b` 的降级判定因此更站得住：不是两人没对上话，而是在都能谈的标签上真不一致。
+- **仲裁预算终于花在该花的地方**。词表内分歧 3.38/研究，稳稳落在 12 的预算里——「两个读者都表了态」的冲突现在必定被仲裁到，不再被 8.7 条单方命名挤掉。`in_vocabulary=False` 的项一条不少地留着，只是排在后面。
+- **一个本体 bug**：`canonical()` 是精确匹配，`rib fracture` / `肋骨骨折` 映射不上，而 `Fracture` 一直躺在本体里（40 份里 6 次因此丢失）。已补别名，但**按字面枚举、不做子串匹配**：`subcutaneous emphysema`（皮下气肿）含 emphysema 却是软组织积气，子串规则会把它映成肺气肿，等于交给合并层一个自信的假一致。
+
+窄、宽两个 kappa 一律并列上报（`merge.agreement`、`StudyState.kappa_all_labels`）——收窄比对范围如果还能顺手改善数字，那就成了用重新定义指标来消灭问题。
+
+下一个该查的不是 `reader_b`，是 **reader_a 的工作点**：LungOpacity 40/40 是报告阈值 0.5 恰好等于模型 `op_threshold` 的直接后果（见 [`prob` 不是概率](#prob-不是概率)）。在那个数被校准之前，任何 kappa 都同时是在量它。
 
 ### `critical_fpr` 是真测量，但不是校准过的假警报率
 
@@ -431,7 +461,7 @@ medscope/
 │   ├── readers/
 │   │   ├── cnn.py            # reader_a：读全 study 视图 + 18 类概率 + 纯 torch Grad-CAM
 │   │   └── vlm.py            # reader_b + 独立性守护 + describer 降级 + 否定式过滤
-│   ├── merge.py              # 招牌：分歧检测（presence/magnitude/unique）+ Cohen's kappa
+│   ├── merge.py              # 招牌：分歧检测 + 窄/宽双 kappa（比对词表内外分开记）
 │   ├── arbiter.py            # 看图仲裁（chat_with_image）+ 指南 RAG，只跑分歧项
 │   ├── critical.py           # 危急值分诊，与报告撰写并行而非串在其后
 │   ├── report.py             # 四段草稿撰写，逐句挂证据
@@ -453,7 +483,7 @@ medscope/
 │   ├── calibrate_vlm.py      # reader_b 基线校准；离线模式拒绝出结论并 exit 2
 │   ├── counterfactual_probe.py    # P4 探路：反事实编辑 vs 对照编辑，无 key 拒跑
 │   └── gen_phi_fixture.py    # G4 夹具生成
-├── tests/                    # pytest（386 passed, 3 deselected）+ conftest（隔离真 .env）
+├── tests/                    # pytest（395 passed, 3 deselected）+ conftest（隔离真 .env）
 ├── .github/workflows/ci.yml
 ├── Dockerfile                # 权重预取放在 USER app 之后，否则缓存落 root 家目录不可见
 └── docker-compose.yml
@@ -488,8 +518,9 @@ medscope/
 - [x] **让 G1 的红字有意义地变绿** —— 确定性选图 + 按 study 读全部视图 + 停止裁掉肺尖与肋膈角：27/27，**且 FPR 与旧实现持平（21/26）**；AUC 0.659 这个事实同时写进了徽章、评测表与[诚实的局限](#-诚实的局限)
 - [ ] **把 FPR 0.808 降到有意义的水平** —— 现在这道门靠着对 21/26 的阴性研究报警来通过。真正的解要么是一个可用的视图分类器（别再把侧位喂进正位模型），要么是校准（`prob` 现在不是概率）；调阈值不算解
 - [x] **reader_b 规模化校准** —— 40 份真实研究：mean kappa **−0.041**、12.35 分歧/研究、95% 是 `unique`，判定降级为 `describer`；同时暴露出读全视图让 reader_a 阳性标签从 3.20 涨到 10.22
-- [ ] **合并层收窄比对范围** —— 两读者一份研究平均只有 0.725 个标签能正面碰上，kappa 现在量的是两个看着不同东西的读者；这是接着动 `reader_b` 之前必须先定的事
-- [ ] **仲裁预算与分歧量对齐** —— `MAX_LLM_JUDGMENTS=12` vs 实测 12.35 分歧/研究，几乎每份都触顶
+- [x] **合并层按标签集收窄比对范围** —— `COMPARISON_LABELS` + `in_vocabulary` 标记；**假设被证伪**（窄 kappa −0.092 比宽 −0.030 更差），但换来仲裁预算的正确排序与一个本体映射 bug 的修复
+- [ ] **校准 reader_a 的工作点** —— LungOpacity 40/40 是阈值 0.5 = 模型 `op_threshold` 的直接后果；在这个数被校准前，任何 kappa 都同时是在量它
+- [x] **仲裁预算与分歧量对齐** —— 词表内分歧 3.38/研究落在 12 的预算内；仲裁按「两读者都表了态」优先，词表外的排后但一条不丢
 - [x] **P4 反事实对照图探路** —— 云端 image-edit（`Qwen/Qwen-Image-Edit`）实测：**对照组把结论否掉了**，概率下降来自编辑动作本身而非病灶移除，见[诚实的局限](#p4-反事实对照图云端-image-edit-这条路实测走不通)
 - [ ] **P4 生成轨（换路线）** —— 受掩膜约束的 inpainting 或胸片专用生成器；本机 Intel 双核无 MPS，本地 SD 不现实，仍得走云端
 - [ ] **P4 合成稀有阳性** —— 纵隔气肿这类全库无可用图像的标签，只有合成能覆盖；但合成数据的保真度必须先过上面那道对照

@@ -18,8 +18,10 @@ shouldn't need rewriting when that happens.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from medscope.config import Settings
-from medscope.ontology import canonical
+from medscope.ontology import COMPARISON_LABELS, canonical
 from medscope.state import Description, Disagreement, Finding, ReadResult
 
 
@@ -96,6 +98,7 @@ def _merge_reader(
     for label in sorted(set(a_mapped) | set(b_mapped)):
         fa = a_mapped.get(label)
         fb = b_mapped.get(label)
+        in_vocab = label in COMPARISON_LABELS
 
         # A label only one reader mentioned is a `unique` disagreement only
         # if that reader actually CALLED it. The two readers are
@@ -106,13 +109,23 @@ def _merge_reader(
         # test_one_sided_negative_call_is_agreement_not_a_unique_disagreement.
         if fa is None:
             if fb.prob >= threshold:
-                disagreements.append(Disagreement(label=label, a_prob=None, b_prob=fb.prob, kind="unique"))
+                disagreements.append(
+                    Disagreement(
+                        label=label, a_prob=None, b_prob=fb.prob, kind="unique",
+                        in_vocabulary=in_vocab,
+                    )
+                )
             else:
                 findings.append(fb)
             continue
         if fb is None:
             if fa.prob >= threshold:
-                disagreements.append(Disagreement(label=label, a_prob=fa.prob, b_prob=None, kind="unique"))
+                disagreements.append(
+                    Disagreement(
+                        label=label, a_prob=fa.prob, b_prob=None, kind="unique",
+                        in_vocabulary=in_vocab,
+                    )
+                )
             else:
                 findings.append(fa)
             continue
@@ -120,26 +133,51 @@ def _merge_reader(
         a_pos = fa.prob >= threshold
         b_pos = fb.prob >= threshold
         if a_pos != b_pos:
-            disagreements.append(Disagreement(label=label, a_prob=fa.prob, b_prob=fb.prob, kind="presence"))
+            disagreements.append(
+                Disagreement(
+                    label=label, a_prob=fa.prob, b_prob=fb.prob, kind="presence",
+                    in_vocabulary=in_vocab,
+                )
+            )
         elif a_pos and abs(fa.prob - fb.prob) >= _magnitude_gap():
             # Both positive, but far enough apart to matter clinically --
             # see Settings.magnitude_gap for the chosen threshold and why.
-            disagreements.append(Disagreement(label=label, a_prob=fa.prob, b_prob=fb.prob, kind="magnitude"))
+            disagreements.append(
+                Disagreement(
+                    label=label, a_prob=fa.prob, b_prob=fb.prob, kind="magnitude",
+                    in_vocabulary=in_vocab,
+                )
+            )
         else:
             findings.append(_merge_finding(fa, fb, label))
 
-    # Labels canonical() couldn't map are never dropped -- an unmapped
-    # label is precisely the case where one reader saw something outside
-    # the other's vocabulary, the highest-value disagreement in the whole
-    # design.
+    # Labels canonical() couldn't map are never dropped. An unmapped label is by definition outside the comparison vocabulary:
+    # there is no shared identity to compare on. It is still recorded --
+    # "reader_b saw a central venous catheter" is information, it is just
+    # not evidence that two readers disagreed about the same thing.
     for finding in a_unmapped:
-        disagreements.append(Disagreement(label=finding.label, a_prob=finding.prob, b_prob=None, kind="unique"))
+        disagreements.append(
+            Disagreement(
+                label=finding.label, a_prob=finding.prob, b_prob=None, kind="unique",
+                in_vocabulary=False,
+            )
+        )
     for finding in b_unmapped:
-        disagreements.append(Disagreement(label=finding.label, a_prob=None, b_prob=finding.prob, kind="unique"))
+        disagreements.append(
+            Disagreement(
+                label=finding.label, a_prob=None, b_prob=finding.prob, kind="unique",
+                in_vocabulary=False,
+            )
+        )
 
     positive_a = {label for label, f in a_mapped.items() if f.prob >= threshold}
     positive_b = {label for label, f in b_mapped.items() if f.prob >= threshold}
-    universe = set(a_mapped) | set(b_mapped)
+    # Narrowed to the labels the two readers can actually be compared on --
+    # see `ontology.COMPARISON_LABELS` for the measurement behind it. The
+    # wide universe is still computed, by `agreement()` below, and reported
+    # next to this one: narrowing the comparison must never mean losing the
+    # number that made narrowing necessary.
+    universe = (set(a_mapped) | set(b_mapped)) & COMPARISON_LABELS
 
     if b_unmapped and not b_mapped:
         # reader_b judged, but every label it produced fell outside the
@@ -278,3 +316,44 @@ def cohens_kappa(labels_a: set[str], labels_b: set[str], universe: set[str]) -> 
     if pe >= 1.0 - 1e-9:
         return 1.0, "kappa_degenerate"
     return (po - pe) / (1 - pe), None
+
+
+@dataclass(frozen=True)
+class Agreement:
+    """Both kappas, side by side, plus what each was computed over.
+
+    Reporting only the narrowed number would be the move this project
+    keeps refusing to make: redefining the measurement until it looks
+    better. `narrow` is the honest agreement signal (labels both readers
+    can speak about); `wide` is the number that made narrowing necessary
+    (-0.041 over 40 studies) and stays visible next to it.
+    """
+
+    narrow: float
+    wide: float
+    n_narrow_labels: int
+    n_wide_labels: int
+    narrow_note: str | None = None
+    wide_note: str | None = None
+
+
+def agreement(read_a: ReadResult, read_b: ReadResult, threshold: float) -> Agreement:
+    """Inter-reader agreement, measured twice: narrowed and wide."""
+    a_mapped, _a_unmapped = _split_mapped(read_a.findings)
+    b_mapped, _b_unmapped = _split_mapped(read_b.findings)
+
+    positive_a = {label for label, f in a_mapped.items() if f.prob >= threshold}
+    positive_b = {label for label, f in b_mapped.items() if f.prob >= threshold}
+    wide_universe = set(a_mapped) | set(b_mapped)
+    narrow_universe = wide_universe & COMPARISON_LABELS
+
+    narrow, narrow_note = cohens_kappa(positive_a, positive_b, narrow_universe)
+    wide, wide_note = cohens_kappa(positive_a, positive_b, wide_universe)
+    return Agreement(
+        narrow=narrow,
+        wide=wide,
+        n_narrow_labels=len(narrow_universe),
+        n_wide_labels=len(wide_universe),
+        narrow_note=narrow_note,
+        wide_note=wide_note,
+    )

@@ -9,7 +9,10 @@ import math
 
 import pytest
 
-from medscope.merge import cohens_kappa, merge_reads
+from medscope.config import Settings
+from medscope.critical import triage
+from medscope.merge import agreement, cohens_kappa, merge_reads
+from medscope.ontology import COMPARISON_LABELS, CRITICAL_LABELS
 from medscope.state import Description, Finding, ReadResult
 
 
@@ -345,3 +348,90 @@ def test_merge_reads_kappa_matches_all_negative_degenerate_case():
     _, _, kappa = merge_reads(read_a, read_b, THRESHOLD)
 
     assert kappa == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Comparison vocabulary: what the two readers can actually be compared on
+# ---------------------------------------------------------------------------
+
+
+def _labelled_read(reader, pairs):
+    return ReadResult(
+        reader=reader,
+        latency_ms=1,
+        findings=[
+            Finding(label=label, prob=prob, source="cnn" if reader == "a" else "vlm")
+            for label, prob in pairs
+        ],
+    )
+
+
+def test_kappa_ignores_labels_reader_b_never_speaks_about():
+    """The defect this exists for: reader_a calls ~10 of its 18 labels
+    positive per study while reader_b names ~2.5 findings, so scoring
+    agreement across all 18 grades reader_b on a vocabulary it does not
+    use. Measured that way over 40 real studies, kappa was -0.041.
+
+    Both readers agree here on the one label they can both speak about;
+    the disagreement is entirely on labels outside the comparison
+    vocabulary. The narrowed number must see the agreement, and the wide
+    number must still show the gap.
+    """
+    read_a = _labelled_read(
+        "a",
+        [("Cardiomegaly", 0.9), ("Emphysema", 0.9), ("Fibrosis", 0.9), ("Infiltration", 0.9)],
+    )
+    read_b = _labelled_read("b", [("Cardiomegaly", 0.9)])
+
+    stats = agreement(read_a, read_b, 0.5)
+
+    assert stats.narrow > stats.wide
+    assert stats.n_narrow_labels < stats.n_wide_labels
+
+
+def test_wide_kappa_is_still_reported_alongside_the_narrow_one():
+    """Narrowing a comparison must never be a way to improve the number by
+    redefining it -- the figure that made narrowing necessary stays
+    visible."""
+    read_a = _labelled_read("a", [("Cardiomegaly", 0.9), ("Emphysema", 0.9)])
+    read_b = _labelled_read("b", [("Cardiomegaly", 0.9)])
+
+    stats = agreement(read_a, read_b, 0.5)
+
+    assert stats.wide is not None
+    assert stats.n_wide_labels == 2
+
+
+def test_out_of_vocabulary_disagreements_are_flagged_not_dropped():
+    """reader_a naming a label reader_b never uses is information, but it
+    is not two readers disagreeing about the same thing. It stays in the
+    list, marked."""
+    read_a = _labelled_read("a", [("Emphysema", 0.9), ("Cardiomegaly", 0.9)])
+    read_b = _labelled_read("b", [])
+
+    _findings, disagreements, _kappa = merge_reads(read_a, read_b, 0.5)
+    by_label = {d.label: d for d in disagreements}
+
+    assert by_label["Emphysema"].in_vocabulary is False
+    assert by_label["Cardiomegaly"].in_vocabulary is True
+    assert len(disagreements) == 2  # neither was dropped
+
+
+def test_every_critical_label_stays_in_the_comparison_vocabulary():
+    """A safety gate's vocabulary must not be decided by what a model
+    happened to say in a 40-study sample."""
+    assert set(CRITICAL_LABELS) <= COMPARISON_LABELS
+
+
+def test_narrowing_does_not_touch_the_critical_channel():
+    """G1 reads the raw per-reader findings, never the merged set, so an
+    out-of-vocabulary narrowing cannot silence an alert. Pinned here
+    because the two modules are edited independently."""
+    read_a = _labelled_read("a", [("Pneumothorax", 0.62), ("Emphysema", 0.9)])
+    read_b = _labelled_read("b", [])
+    settings = Settings()
+
+    _findings, _disagreements, _kappa = merge_reads(read_a, read_b, 0.5)
+    alerts = triage(list(read_a.findings) + list(read_b.findings), settings)
+
+    assert "Pneumothorax" in {a.label for a in alerts}

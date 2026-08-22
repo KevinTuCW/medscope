@@ -82,7 +82,7 @@ from medscope.guardrails.input import screen_intake
 from medscope.guardrails.output import enforce_output
 from medscope.guardrails.process import cap_findings
 from medscope.language import REQUIRED_DISCLAIMER, detect_redlines, has_disclaimer, neutralize
-from medscope.merge import merge_reads
+from medscope.merge import agreement, merge_reads
 from medscope.qc import check_quality
 from medscope.rag.store import Retriever
 from medscope.readers.vlm import VLMClient, read_b
@@ -146,6 +146,7 @@ class GraphState(TypedDict, total=False):
     findings: list[Finding]
     disagreements: list[Disagreement]
     kappa: float | None
+    kappa_all_labels: float | None
     arbitration_records: list[dict]
     alerts: list[CriticalAlert]
     report: ReportDraft | None
@@ -303,6 +304,9 @@ def build_graph(deps: GraphDeps):
         findings, disagreements, kappa = merge_reads(
             state["read_a"], state["read_b"], deps.settings.cnn_prob_threshold, deps.settings.reader_b_mode
         )
+        # Both numbers travel with the study: the audit view must be able to
+        # show what the comparison was narrowed *from*.
+        stats = agreement(state["read_a"], state["read_b"], deps.settings.cnn_prob_threshold)
         # Process guardrail: deduplicate and drop malformed findings *before*
         # the arbiter, where every surviving disagreement buys an LLM call,
         # and before the report, where a malformed finding would become a
@@ -312,6 +316,7 @@ def build_graph(deps: GraphDeps):
             "findings": findings,
             "disagreements": disagreements,
             "kappa": kappa,
+            "kappa_all_labels": stats.wide,
             "trace_events": [_trace_event("merge")],
         }
         if dropped:

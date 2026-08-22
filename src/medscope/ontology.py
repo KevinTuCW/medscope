@@ -92,8 +92,22 @@ CANONICAL: dict[str, str] = {
     "Lung Lesion": "LungLesion",
     "肺部病变": "LungLesion",
     # -- Fracture --
+    # Site-qualified aliases are enumerated one by one rather than matched
+    # by substring, and that restraint is the point: "subcutaneous
+    # emphysema" contains "emphysema" but names soft-tissue air, not the
+    # pulmonary disease `Emphysema` stands for -- a substring rule would
+    # map it and hand the merge layer a confident false agreement.
+    # Measured over 40 real reader_b studies, "rib fracture" (5 mentions)
+    # and "肋骨骨折" (1) were the most common unmappable outputs for which
+    # the ontology already had a home.
     "Fracture": "Fracture",
     "骨折": "Fracture",
+    "Rib Fracture": "Fracture",
+    "肋骨骨折": "Fracture",
+    "Clavicle Fracture": "Fracture",
+    "锁骨骨折": "Fracture",
+    "Vertebral Fracture": "Fracture",
+    "椎体骨折": "Fracture",
     # -- LungOpacity --
     "Lung Opacity": "LungOpacity",
     "肺部阴影": "LungOpacity",
@@ -124,6 +138,44 @@ CRITICAL_LABELS: tuple[str, ...] = (
     "Pneumothorax",
     "PleuralEffusion",
     "Pneumomediastinum",
+)
+
+#: Labels on which the two readers can actually be compared.
+#:
+#: This is a **measurement**, not a decree, and it exists because the
+#: alternative was measuring the wrong thing. Over 40 real studies
+#: (scripts/calibrate_vlm.py --limit 40, Qwen3-VL-32B), reader_a called
+#: 10.22 of its 18 labels positive per study -- LungOpacity on 40/40 --
+#: while reader_b named 2.575 findings, of which only 5 distinct labels
+#: ever landed on this ontology at all: Cardiomegaly (19 mentions),
+#: LungOpacity (6), PleuralEffusion (2), Pneumonia (1), Pneumothorax (1),
+#: plus Fracture once the site-qualified aliases above were added. Scoring
+#: agreement across all 18 labels therefore graded reader_b on a
+#: vocabulary it demonstrably does not use, and the resulting kappa
+#: (-0.041) was mostly a statement about reader_a's calibration.
+#:
+#: The critical labels are unioned in unconditionally. A safety gate's
+#: vocabulary must never be decided by what a model happened to say in a
+#: 40-study sample -- narrowing that could quietly drop Pneumothorax from
+#: comparison is the same move as deleting an inconvenient gold-set label.
+#:
+#: What this does NOT do: hide anything. Labels outside it still produce
+#: findings, still reach `critical.triage` (which reads the raw
+#: per-reader findings, never the merged set), and still get recorded as
+#: out-of-vocabulary disagreements -- they just stop being counted as
+#: evidence that two readers disagreed about something both of them read.
+#: `merge.agreement` reports the wide kappa alongside the narrow one for
+#: exactly this reason.
+COMPARISON_LABELS: frozenset[str] = frozenset(
+    {
+        "Cardiomegaly",
+        "LungOpacity",
+        "PleuralEffusion",
+        "Pneumonia",
+        "Pneumothorax",
+        "Fracture",
+    }
+    | set(CRITICAL_LABELS)
 )
 
 # Chinese full/half-width punctuation joins the ASCII set here because NFKC

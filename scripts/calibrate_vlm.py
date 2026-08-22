@@ -56,7 +56,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from medscope.config import Settings  # noqa: E402
 from medscope.data.openi import load_studies  # noqa: E402
-from medscope.merge import merge_reads  # noqa: E402
+from medscope.merge import agreement, merge_reads  # noqa: E402
 from medscope.ontology import canonical  # noqa: E402
 from medscope.readers.cnn import CNNReader  # noqa: E402
 from medscope.readers.vlm import OfflineVLMClient, build_vlm_client, read_b  # noqa: E402
@@ -169,6 +169,9 @@ def main() -> None:
         _findings, disagreements, kappa = merge_reads(
             read_a_result, read_b_result, settings.cnn_prob_threshold, mode="reader"
         )
+        # Narrowed and wide, always together -- reporting only the narrowed
+        # kappa would be improving the number by redefining it.
+        stats = agreement(read_a_result, read_b_result, settings.cnn_prob_threshold)
         # `n_disagreements` alone hid a structural defect for a whole
         # calibration run: every disagreement was `unique` (a label only one
         # reader named) and not one was a head-to-head `presence` or
@@ -188,6 +191,10 @@ def main() -> None:
             {
                 "study_id": study.study_id,
                 "kappa": kappa,
+                "kappa_all_labels": stats.wide,
+                "n_comparison_labels": stats.n_narrow_labels,
+                "n_all_labels": stats.n_wide_labels,
+                "in_vocab_disagreements": sum(1 for d in disagreements if d.in_vocabulary),
                 "n_disagreements": len(disagreements),
                 "disagreements_by_kind": dict(by_kind),
                 "n_shared_labels": len(shared),
@@ -207,11 +214,15 @@ def main() -> None:
         )
 
     mean_kappa = statistics.mean(s["kappa"] for s in per_study)
+    mean_kappa_all = statistics.mean(s["kappa_all_labels"] for s in per_study)
+    mean_in_vocab = statistics.mean(s["in_vocab_disagreements"] for s in per_study)
     mean_disagreements = statistics.mean(s["n_disagreements"] for s in per_study)
     share_with_disagreement = sum(1 for s in per_study if s["n_disagreements"] > 0) / len(per_study)
 
     print(f"\nStudies read: {len(per_study)}")
-    print(f"Mean Cohen's kappa: {mean_kappa:.3f}")
+    print(f"Mean Cohen's kappa (comparison vocabulary): {mean_kappa:.3f}")
+    print(f"Mean Cohen's kappa (all mapped labels):     {mean_kappa_all:.3f}")
+    print(f"Mean in-vocabulary disagreements / study:   {mean_in_vocab:.2f}")
     print(f"Mean disagreements per study: {mean_disagreements:.3f}")
     print(f"Share of studies with >= 1 disagreement (disagreement_rate): {share_with_disagreement:.1%}")
 

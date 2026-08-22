@@ -87,6 +87,16 @@ class Disagreement(BaseModel):
     a_prob: float | None
     b_prob: float | None
     kind: Literal["presence", "magnitude", "unique"]
+    #: Whether this label is one the two readers can actually be compared
+    #: on (`ontology.COMPARISON_LABELS`). False means one reader named
+    #: something the other has no way to speak about -- reader_a calling a
+    #: label reader_b never uses, or reader_b reporting "central venous
+    #: catheter", which is real information but is not two readers
+    #: disagreeing about the same thing. Measured over 40 studies, 95% of
+    #: all disagreements were of that second kind; counting them as
+    #: conflicts is what drove kappa to -0.041. Still recorded, still
+    #: arbitrated -- just after the ones where both readers spoke.
+    in_vocabulary: bool = True
     # presence = one reader positive, one negative
     # magnitude = both positive but across a threshold
     # unique = only one reader mentioned this label at all
@@ -131,7 +141,12 @@ class StudyState(BaseModel):
     read_b: ReadResult | None = None
     findings: list[Finding] = Field(default_factory=list)
     disagreements: list[Disagreement] = Field(default_factory=list)
+    #: Agreement over `ontology.COMPARISON_LABELS` -- the labels the two
+    #: readers can actually be compared on.
     kappa: float | None = None
+    #: The same agreement computed over every mapped label, kept next to
+    #: the narrowed one so narrowing can never quietly improve the number.
+    kappa_all_labels: float | None = None
     #: One record per disagreement, including ones the budget cap left
     #: unarbitrated. Kept as a fact rather than re-derived downstream: the
     #: workbench used to infer a verdict from whether a finding survived

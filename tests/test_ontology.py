@@ -44,3 +44,22 @@ def test_critical_labels_are_all_valid_canonical_names():
     # produce -- i.e. silently green and useless.
     for label in CRITICAL_LABELS:
         assert canonical(label) == label
+
+
+def test_site_qualified_fracture_maps_to_fracture():
+    """"rib fracture" was reader_b's single most common unmappable output
+    over 40 real studies (5 mentions, plus 肋骨骨折), while `Fracture` was
+    sitting in the ontology the whole time -- `canonical()` is an exact
+    lookup, not a substring match."""
+    for alias in ("rib fracture", "Rib Fracture", "肋骨骨折", "clavicle fracture", "锁骨骨折"):
+        assert canonical(alias) == "Fracture", alias
+
+
+def test_subcutaneous_emphysema_does_not_map_to_emphysema():
+    """The reason the fracture aliases above are enumerated rather than
+    substring-matched. Subcutaneous emphysema is soft-tissue air;
+    `Emphysema` is the pulmonary disease. A substring rule would map this
+    and hand the merge layer a confident false agreement between two
+    readers talking about different organs."""
+    assert canonical("subcutaneous emphysema") != "Emphysema"
+    assert canonical("皮下气肿") != "Emphysema"

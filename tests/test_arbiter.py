@@ -181,3 +181,45 @@ def test_zero_disagreements_zero_calls_findings_unchanged():
     assert outcome.findings == findings
     assert outcome.needs_human is False
     assert outcome.status is None
+
+
+def test_budget_goes_to_labels_both_readers_addressed_first():
+    """When the budget runs out -- and measured over 40 real studies it
+    runs out on essentially every study (12.35 disagreements vs a cap of
+    12) -- the *order* is the decision.
+
+    Here the out-of-vocabulary items come first in the input list, so a
+    first-come implementation spends the single available call on one of
+    them and leaves the genuine two-reader conflict unarbitrated.
+    """
+    out_of_vocab = [
+        Disagreement(label=f"Fibrosis{i}", a_prob=0.9, b_prob=None, kind="unique", in_vocabulary=False)
+        for i in range(3)
+    ]
+    real_conflict = Disagreement(
+        label="Pneumothorax", a_prob=0.7, b_prob=0.2, kind="presence", in_vocabulary=True
+    )
+    client = FakeArbiterClient(["CONFIRM"])
+    deps = ArbiterDeps(client=client, retriever=FakeRetriever([]))
+    settings = Settings(max_llm_judgments=1)
+
+    outcome = arbitrate([], [*out_of_vocab, real_conflict], deps, settings, _IMAGE_PATH)
+
+    arbitrated = [r for r in outcome.records if r.verdict != "UNARBITRATED"]
+    assert [r.label for r in arbitrated] == ["Pneumothorax"]
+    # Nothing is dropped by the reordering -- the rest are still recorded.
+    assert len(outcome.records) == 4
+
+
+def test_reordering_does_not_drop_or_duplicate_anything():
+    mixed = [
+        Disagreement(label="Emphysema", a_prob=0.9, b_prob=None, kind="unique", in_vocabulary=False),
+        Disagreement(label="Cardiomegaly", a_prob=0.8, b_prob=0.3, kind="presence"),
+        Disagreement(label="LungOpacity", a_prob=0.9, b_prob=None, kind="unique"),
+    ]
+    client = FakeArbiterClient(["CONFIRM", "CONFIRM", "CONFIRM"])
+    deps = ArbiterDeps(client=client, retriever=FakeRetriever([]))
+
+    outcome = arbitrate([], mixed, deps, Settings(), _IMAGE_PATH)
+
+    assert sorted(r.label for r in outcome.records) == ["Cardiomegaly", "Emphysema", "LungOpacity"]
