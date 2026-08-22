@@ -65,6 +65,10 @@ from medscope.views import primary_view  # noqa: E402
 
 OUT_PATH = Path("/tmp/medscope_vlm_calibration.json")
 
+#: Above this many studies, an unbounded keyed run has to be asked for
+#: explicitly (--yes-run-all). See the comment at the check itself.
+UNATTENDED_STUDY_CAP = 100
+
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -72,6 +76,12 @@ def _parse_args() -> argparse.Namespace:
         "--root", type=Path, default=None, help="Dataset root (default: Settings().openi_root)"
     )
     parser.add_argument("--limit", type=int, default=None, help="Only read the first N studies")
+    parser.add_argument(
+        "--yes-run-all",
+        action="store_true",
+        help=f"Run over every study even when there are more than {UNATTENDED_STUDY_CAP} "
+        "of them (one keyed VLM call each).",
+    )
     return parser.parse_args()
 
 
@@ -89,6 +99,26 @@ def main() -> None:
         print("For a quick offline smoke test against the repo's sample slice, try:")
         print("  PYTHONPATH=src .venv/bin/python scripts/calibrate_vlm.py --root data/samples/studies")
         sys.exit(1)
+
+    # An unbounded run is a spending decision, so it has to be made on
+    # purpose. This script was once launched with no --limit against what
+    # its author believed were ~51 locally-available studies; the full
+    # archive had since been fetched, so the real figure was 3851 -- one
+    # keyed VLM call each, roughly a day of wall clock. It ran for 55
+    # minutes before anyone noticed, and since results were only written
+    # at the end, that spend produced nothing at all. Hence both this cap
+    # and the incremental write below.
+    if (
+        not args.limit
+        and not args.yes_run_all
+        and len(studies) > UNATTENDED_STUDY_CAP
+        and settings.use_real_vlm
+    ):
+        sys.exit(
+            f"calibrate_vlm: {len(studies)} studies under {root} would mean {len(studies)} "
+            f"keyed VLM calls (~{len(studies) * 25 / 3600:.1f}h at the measured ~25s/study).\n"
+            f"Pass --limit N for a calibration sample, or --yes-run-all to mean it."
+        )
 
     # `use_real_vlm=False` (the default, no API key configured) means the
     # only reader_b available is OfflineVLMClient -- see the honesty
@@ -165,6 +195,15 @@ def main() -> None:
                 "reader_b_labels": [f.label for f in read_b_result.findings],
                 "reader_b_raw_labels": [f.raw_label for f in read_b_result.findings],
             }
+        )
+        # Written after every study, not once at the end: a run that gets
+        # interrupted (or killed) still leaves behind everything it paid
+        # for. The summary below recomputes from the same list.
+        OUT_PATH.write_text(json.dumps({"partial": True, "per_study": per_study}, indent=2))
+        print(
+            f"  [{len(per_study)}/{len(studies)}] {study.study_id} "
+            f"kappa={kappa:.3f} disagreements={len(disagreements)}",
+            flush=True,
         )
 
     mean_kappa = statistics.mean(s["kappa"] for s in per_study)
