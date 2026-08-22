@@ -54,7 +54,7 @@
 - 🎞️ **读的是 study，不是文件** —— 放射科医生读的是一份研究的全部投照，不是文件夹里第一个文件。`reader_a` 对每张片各推理一遍、逐标签取最大，并**把结论归属到看见它的那一张片**上；读片顺序由 `views.py` 从像素与文件名算出，与操作系统枚举顺序无关。这一条直接把 G1 从 22/27 抬到 27/27，而 FPR 不变。归属不是装饰：在侧位片上算出的 Grad-CAM 画到正位片上，是一个自信的错误标注。
 - 🚨 **危急值旁路抢报** —— `triage()` 与报告撰写**并行**跑，不等报告写完就告警，照搬医院的 critical results communication 制度。用 `critical_threshold=0.3` 而非报告阈值 0.5：**漏一例气胸可能致命，多报一例只花医生三十秒**，这个非对称是刻意的，且召回与误报率**永不合并成 F1**。
 - 📎 **无证据不出句（硬门）** —— 报告里每一句话都必须引用一个带 `source` / `prob` / `locus` 的 `Finding`；零引用句在图里由 `evidence_check` 处理（重试一次再剥离），不是在写作层偷偷丢掉。工作台上悬停任一句话，图上对应区域与证据卡同时高亮。
-- ⚖️ **仲裁器自己也看图** —— 只看两个读者的结论 + 指南散文，等于拿先验重新掂量断言，那不是仲裁而是复读。`arbiter` 走 `chat_with_image`，prompt 明确要求「根据图上所见判断」；且**只在分歧项上花 LLM 预算**（`max_llm_judgments` 封顶）。
+- ⚖️ **仲裁器自己也看图** —— 只看两个读者的结论 + 指南散文，等于拿先验重新掂量断言，那不是仲裁而是复读。`arbiter` 走 `chat_with_image`，prompt 明确要求「根据图上所见判断」；且**只在分歧项上花 LLM 预算**（`max_llm_judgments` 封顶）。预算实测几乎每份研究都会打满，所以**顺序即决策**：先仲裁「两个读者都对同一标签表了态」的冲突，再轮到单方命名的——后者一条不丢，只是排后。
 - 🔒 **PHI 0 泄漏（硬门）** —— 先写**合成 PHI 注入器**再写脱敏器，顺序反了 G4 就是恒真断言（Open-i 本身已去标识，拿它验脱敏是重言式）。注入器沿命名维度做组合生成，2000 种子扫描零泄漏。
 - 📐 **诊断口径红线（硬门）** —— 输出层拦截确诊式表述、强制免责声明，并在 14 例夹具上同时量**拦截率**与**误伤率**——只量拦截率的话，一个把所有句子都拦下的护栏能拿满分。
 - 🧪 **每道硬门都有一个已被演示过的失败方式** —— 五道门各配一个「故意打断实现 → 门必须变红」的非重言性测试。写这些破坏测试的过程本身就抓出过一个指标测错对象的 bug（见[评测](#-评测)）。
@@ -79,7 +79,7 @@ qc 图像质控 ─▶ 分辨率过低 / 无信号 → NEEDS_REPEAT 终止（侧
    └──▶ reader_b（VLM · 看主视图独立读片）                  ─┤  prompt 互不含对方任何输出
    │                                          │
    ▼                                          ▼
-merge 合并（presence / magnitude / unique 三类分歧 + Cohen's kappa）
+merge 合并（分歧分三类 + 标记是否在比对词表内 + 窄/宽双 kappa）
    │
    ├──旁路──▶ critical_triage 危急值分诊 ──▶ 抢在报告之前告警（G1 硬门）
    │
@@ -102,6 +102,7 @@ review_queue ─▶ 报告草稿 + 证据链 + 危急值时间线 → 执业医�
 - **异质双读**（`readers/` + `merge.py` + `views.py`）—— CNN 出数不懂语境，VLM 懂语境不出数，**失效模式正交**。两个读者看到的图也不对称：`reader_a` 读整份研究的全部投照，`reader_b`（以及仲裁器、报告撰写）只看主视图——这是成本取舍，写在这里而不是留给别人从 trace 里发现。`tests/test_reader_independence.py` 断言 reader_a 的任何输出都不得出现在 reader_b 的 prompt 里，`describer` 降级模式下依然独立。
 - **一裁**（`arbiter.py`）—— 只看两个读者的结论 + 指南散文，等于拿先验重新掂量断言；仲裁器走 `chat_with_image` **自己看图**，prompt 明确要求「根据图上所见判断，而非重新掂量两读者报告的概率」。
 - **危急值旁路**（`critical.py`）—— 不依赖报告存在、不依赖 `merge_reads`、不等仲裁：一个只有单读者叫阳性的危急标签必须立刻告警，所以它拿的是两读者的**原始 findings** 而非合并后的一致项。
+- **比对范围按标签集收窄**（`ontology.COMPARISON_LABELS`）—— 只在两个读者都能开口的标签上算一致性，词表外的分歧标 `in_vocabulary=False`，一条不丢但排在仲裁队列后面。窄、宽两个 kappa 并列上报，理由见[诚实的局限](#按标签集收窄假设被自己的数据否掉了)：收窄让数字更难看了，改动留下的是别的东西。
 - **降级分支是正式设计**（`READER_B_MODE`）—— `kappa < 0.4 或 分歧率 > 40%` 时 reader_b 从「独立读者」降为「描述生成器」（判定权归 CNN，仲裁语义改为「描述是否支持 CNN 判定」），两种模式都有测试覆盖。
 - 整条流水线由 **LangGraph** 编排（条件路由 + 并行旁路 + evidence 重试回环），三层护栏 `input` / `process` / `output` 横切全程。
 
@@ -337,6 +338,8 @@ make eval        # 或 EVAL_ARGS="--suite critical" make eval
 
 判定规则据此把 `reader_b_mode` 降为 **`describer`**（kappa −0.041 < 0.4，分歧率 1.0 > 0.4）——这次是有统计量支撑的结论，不是形态。
 
+> **同一批 40 份研究跑第二遍，宽 kappa 是 −0.030 而不是 −0.041**（下一节那张表里的数）。差值来自两处：VLM 每次输出本就不完全一致；以及第二次跑时本体补了骨折别名，多映上了几条。两个数都远低于 0.4，降级判定不受影响——但**它们不该被当成同一个数引用**，所以这里两处都保留原值。
+
 **但这个数字同时是在说我自己的另一处改动。** 读全视图之后，`reader_a` 每份研究叫阳性的标签从 **3.20 涨到 10.22**（同 40 份研究实测，平均 2.00 张片/研究），而 `reader_b` 只看主视图、平均只报 2.575 个标签。于是两个读者一份研究里平均只有 **0.725 个标签能正面碰上**，其余全被记成 `unique`——**「分歧是一处需要人看的精确指针」这个前提，在真实数据上还没有兑现**：95% 的所谓分歧是「一个读者提了另一个压根没提」，那不是临床意义上的分歧。
 
 两个连带后果，一并记在这里：
@@ -372,9 +375,18 @@ make eval        # 或 EVAL_ARGS="--suite critical" make eval
 - **仲裁预算终于花在该花的地方**。词表内分歧 3.38/研究，稳稳落在 12 的预算里——「两个读者都表了态」的冲突现在必定被仲裁到，不再被 8.7 条单方命名挤掉。`in_vocabulary=False` 的项一条不少地留着，只是排在后面。
 - **一个本体 bug**：`canonical()` 是精确匹配，`rib fracture` / `肋骨骨折` 映射不上，而 `Fracture` 一直躺在本体里（40 份里 6 次因此丢失）。已补别名，但**按字面枚举、不做子串匹配**：`subcutaneous emphysema`（皮下气肿）含 emphysema 却是软组织积气，子串规则会把它映成肺气肿，等于交给合并层一个自信的假一致。
 
-窄、宽两个 kappa 一律并列上报（`merge.agreement`、`StudyState.kappa_all_labels`）——收窄比对范围如果还能顺手改善数字，那就成了用重新定义指标来消灭问题。
+窄、宽两个 kappa 一律并列上报（`merge.agreement`、`StudyState.kappa_all_labels`）——收窄比对范围如果还能顺手改善数字，那就成了用重新定义指标来消灭问题。主口径取**更保守的窄值**（`StudyState.kappa` 与降级判定都用它）：若收窄之后主口径反而好看了 0.06，那正是本仓库一直在反对的动作。
 
 下一个该查的不是 `reader_b`，是 **reader_a 的工作点**：LungOpacity 40/40 是报告阈值 0.5 恰好等于模型 `op_threshold` 的直接后果（见 [`prob` 不是概率](#prob-不是概率)）。在那个数被校准之前，任何 kappa 都同时是在量它。
+
+### 校准判定说降级，而默认仍是 `reader`
+
+这不是忘了改。`scripts/calibrate_vlm.py` 在 40 份研究上输出的建议是 `reader_b_mode = describer`，而 `Settings.reader_b_mode` 的默认值仍是 `reader`——**两者不一致，且这个不一致是刻意留着的**：
+
+- 那个 kappa **同时在量 reader_a**。拿一个被对方偏置污染的数去永久降级 reader_b，是把 reader_a 的标定问题记到 reader_b 账上。
+- 降级**不是拧一个旋钮**，是换掉整条仲裁语义（判定权归 CNN，仲裁改问「描述是否支持 CNN 判定」）。在 reader_a 的工作点校准之前做这个切换，等于让一个未校准的读者独占判定权。
+
+所以当前状态是：**判定规则照常跑、照常输出建议，配置不自动跟随它**。要按建议运行就显式设 `READER_B_MODE=describer`（两种模式都有测试覆盖）。这条会一直摆在这里，直到 reader_a 的工作点被校准、这个决策能建立在一个干净的数上。
 
 ### `critical_fpr` 是真测量，但不是校准过的假警报率
 
@@ -449,7 +461,7 @@ medscope/
 │   ├── config.py             # pydantic-settings（危急值标签清单刻意不在这里）
 │   ├── bootstrap.py          # Deps 装配：样例 / 真实后端
 │   ├── state.py              # StudyState / Finding / Description / Disagreement / CriticalAlert
-│   ├── ontology.py           # 标签本体；CRITICAL_LABELS 是 G1 的单一真源
+│   ├── ontology.py           # 标签本体；CRITICAL_LABELS 是 G1 单一真源；COMPARISON_LABELS 是比对词表
 │   ├── data/
 │   │   ├── dicom.py          # 真实 DICOM 读取：MONOCHROME1 反相 / rescale / file meta 组
 │   │   ├── openi.py          # 数据集加载与图文配对
@@ -499,7 +511,7 @@ medscope/
 | `CNN_WEIGHTS` | `densenet121-res224-all` | reader_a 权重集；类目数运行时读取，**不要硬编码 14 类** |
 | `CNN_PROB_THRESHOLD` | `0.5` | 进报告的阈值（= 模型工作点，见「`prob` 不是概率」） |
 | `CRITICAL_THRESHOLD` | `0.3` | 危急值告警阈值，**刻意低于**报告阈值 |
-| `READER_B_MODE` | `reader` | `reader`（同侪）\| `describer`（降级为描述器） |
+| `READER_B_MODE` | `reader` | `reader`（同侪）\| `describer`（降级为描述器）。**校准判定输出的是 `describer`，默认值仍是 `reader`，这个不一致是刻意的**——见[诚实的局限](#校准判定说降级而默认仍是-reader) |
 | `VLM_MODEL` / `VLM_BASE_URL` / `VLM_API_KEY` | 空 | reader_b 的 OpenAI 兼容端点；**填前用 `/models` 核对 id，不要凭记忆猜** |
 | `USE_REAL_VLM` | `false` | 关时 reader_b 走 `OfflineVLMClient` 替身 |
 | `KAPPA_FLOOR` / `DISAGREEMENT_CEILING` | `0.4` / `0.4` | `calibrate_vlm.py` 的降级判据 |
