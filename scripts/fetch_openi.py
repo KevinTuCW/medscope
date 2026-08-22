@@ -362,8 +362,9 @@ def main() -> None:
     parser.add_argument(
         "--use-proxy",
         action="store_true",
-        help="Honour HTTP(S)_PROXY / ALL_PROXY from the environment. Off by default: "
-        "measured here at ~1 KB/s through the proxy vs ~34 KB/s direct.",
+        help="Honour HTTP(S)_PROXY / ALL_PROXY from the environment. Off by default -- "
+        "a proxy can slow these large downloads down by orders of magnitude, and httpx "
+        "needs httpx[socks] to use a SOCKS one at all.",
     )
     parser.add_argument(
         "--skip-reports",

@@ -130,14 +130,14 @@ python3.12 -m venv .venv                  # torch 在 3.14 上无可靠 wheel
 .venv/bin/pip install -e ".[cv,llm]"
 
 # 2. 跑测试（离线、hermetic、零 key）
-PYTHONPATH=src .venv/bin/pytest -q        # 398 passed, 3 deselected in ~47s
+PYTHONPATH=src .venv/bin/pytest -q        # 398 passed, 3 deselected
 PYTHONPATH=src .venv/bin/pytest -m slow   # 2 个真权重用例 + 1 个真 DICOM 用例（无片则跳过）
 
 # 3. 跑评测门禁
 make eval                                 # 当前 GATE: PASS（G1 27/27；先读「诚实的局限」再信这盏灯）
 
 # 4. 启动工作台
-PYTHONPATH=src .venv/bin/uvicorn medscope.app:app --reload   # → /workbench
+make run                                  # → http://localhost:8000/workbench（PORT=8081 可换端口）
 ```
 
 仓内已含 3 例样本切片，**克隆即可离线跑通全流程**，无需 key、无需网络。
@@ -162,7 +162,7 @@ PYTHONPATH=src .venv/bin/python scripts/fetch_openi.py --image-bytes 20000000
 ```
 
 图像包 1.36 GB，`--image-bytes` 用 HTTP Range 只取前缀，20 MB 即可解出约 108 张完整 PNG。
-真实 DICOM 走 `--dicom-bytes N`（80.7 GB 归档取前缀，只保留像素完整的片子）。**默认绕开环境代理**：本机实测直连约 34 KB/s、走 SOCKS 代理只有 1 KB/s，要用代理得显式 `--use-proxy`。
+真实 DICOM 走 `--dicom-bytes N`（80.7 GB 归档取前缀，只保留像素完整的片子）。**默认绕开环境代理**——代理会显著拖慢大文件下载，SOCKS 代理还需要 `httpx[socks]` 才能用；确实需要代理时显式 `--use-proxy`。
 
 ## 💬 使用示例
 
@@ -289,7 +289,7 @@ make eval        # 或 EVAL_ARGS="--suite critical" make eval
 
 已在 **5 张真实 Open-i CR 片**上端到端跑通（2828×2320，`--dicom-bytes 45000000` 取到的；`pytest -m slow` 里有对应用例，片子不在仓内时自动跳过）：全部 MONOCHROME1，每张丢弃 46–56 个标签、保留 18 个，file meta 组 5 个识别符每次都被点名，QC 通过，视图判据给出正位 0.923 / 0.789、侧位 −0.156。
 
-**5 张不是一个批次。** 要跑成有统计意义的规模，34 KB/s 的带宽下得挂着慢慢拉（80.7 GB 归档、单张未压缩 13 MB 且压缩率很差）。这不写进路线图是因为它不是「活」而是「等」——形态已经验过，剩下的只是字节。
+**5 张不是一个批次。** 要跑成有统计意义的规模就是一次长下载（80.7 GB 归档、单张未压缩 13 MB 且压缩率很差）。这不写进路线图是因为它不是「活」而是「等」——形态已经验过，剩下的只是字节。
 
 打开一份真的 Open-i CR 文件，立刻翻出四样合成 `pydicom.Dataset` 永远测不到的东西——**这就是「白名单只由内存里造的 Dataset 覆盖过」为什么不算数**：
 
@@ -394,7 +394,7 @@ make eval        # 或 EVAL_ARGS="--suite critical" make eval
 
 `CNN_PROB_THRESHOLD = 0.5` 从来不是「概率过半」，而是恰好落在 torchxrayvision 的 `op_norm` 把每个标签自身工作点映射到的那个位置。也就是说「阳性」一直等于「越过了 torchxrayvision 选的工作点」，与 Open-i 这批数据毫无关系。
 
-拿语料自己来量：Open-i 用 MeSH 主词条给每份研究做了索引，其中 **1379 份被索引为 `normal`**。以 600 份 `normal` 作阴性总体、MeSH 词条作弱阳性标签（`scripts/calibrate_operating_points.py`，1500 份研究、约 16 分钟 CPU、零 API 调用），先看**当前阈值在「报告说正常」的片子上的阳性率**：
+拿语料自己来量：Open-i 用 MeSH 主词条给每份研究做了索引，其中 **1379 份被索引为 `normal`**。以 600 份 `normal` 作阴性总体、MeSH 词条作弱阳性标签（`scripts/calibrate_operating_points.py`，1500 份研究，纯 CPU、零 API 调用；换规则用 `--recompute-from` 免重跑评分），先看**当前阈值在「报告说正常」的片子上的阳性率**：
 
 | 标签 | 报告正常却被叫阳性 | AUC（弱标签） | 弱阳性数 |
 | --- | --- | --- | --- |
@@ -438,7 +438,7 @@ eval 里评的草稿**已经过运行时证据门处理**（`graph._apply_eviden
 
 ### 其他
 
-- **真实 DICOM：读得进来了，但仍未在完整数据集上跑过**。此前这里写的是「Open-i 的 DICOM 分发不可达」——**这条已被证伪**：`NLMCXR_dcm.tgz`（80.7 GB）会正常返回 `206 Partial Content`，`scripts/fetch_openi.py --dicom-bytes N` 现在能按前缀取。三个仍然成立的约束：归档**间歇性返回维护错误页**（所以有 `_require_gzip`）；本机直连约 34 KB/s，而走环境里的 SOCKS 代理只有 1 KB/s（所以默认 `trust_env=False`，要代理得显式 `--use-proxy`）；单张 CR 未压缩 13 MB 且压缩率很差，取前缀是**几张片**而不是一个数据集。像素不完整的片子一律丢弃而不是留着——tar 会按头部声明的大小把文件建出来，一个 93% 是零的片子照样能解析、照样报出合理的 `Rows`/`Columns`，「能打开」不构成证据。
+- **真实 DICOM：读得进来了，但仍未在完整数据集上跑过**。此前这里写的是「Open-i 的 DICOM 分发不可达」——**这条已被证伪**：`NLMCXR_dcm.tgz`（80.7 GB）会正常返回 `206 Partial Content`，`scripts/fetch_openi.py --dicom-bytes N` 现在能按前缀取。三个仍然成立的约束：归档**间歇性返回维护错误页**（所以有 `_require_gzip`）；环境代理会显著拖慢下载、SOCKS 还需额外依赖（所以默认 `trust_env=False`，要代理得显式 `--use-proxy`）；单张 CR 未压缩 13 MB 且压缩率很差，取前缀是**几张片**而不是一个数据集。像素不完整的片子一律丢弃而不是留着——tar 会按头部声明的大小把文件建出来，一个 93% 是零的片子照样能解析、照样报出合理的 `Rows`/`Columns`，「能打开」不构成证据。
 - 正位/侧位判据是镜像对称性启发式（`data/samples/qc/` 的样图上正位 0.833–0.851、侧位 0.151/−0.049，阈值 0.5），**不是经过验证的视图分类器**，故仅作软告警。**它在真实片子上比这个区间糊得多**：G1 金标准里几份研究的得分落在 0.403–0.787，直接骑在阈值上（study 1704 两张片 0.467 / 0.494，双双被判侧位，而它是一例确诊大量积液）。这就是 `views.py` 只用它排序、绝不用它丢片的原因。
 - 环境中 torch 2.2.2 与 numpy 2.x 存在 ABI 冲突，`readers/cnn.py` 以 `torch.frombuffer` 绕开（容器内已钉死兼容版本组合）。
 - 指南语料是**自行合成的教学材料**，非真实指南摘录，不含任何虚构出处。
@@ -482,7 +482,7 @@ LANGFUSE_PUBLIC_KEY=... LANGFUSE_SECRET_KEY=... LANGFUSE_HOST=https://us.cloud.l
 medscope/
 ├── README.md
 ├── pyproject.toml            # 依赖 + extras(cv/llm/gen) + slow marker 与默认 deselect
-├── Makefile                  # make test / eval（EVAL_ARGS 透传）
+├── Makefile                  # make test / eval（EVAL_ARGS 透传）/ run（工作台，PORT 可改）
 ├── .env.example              # 裸变量名，无前缀
 ├── data/
 │   ├── samples/              # 离线切片：克隆即可零 key 跑通全流程
@@ -570,7 +570,7 @@ medscope/
 - [x] **reader_b 规模化校准** —— 40 份真实研究：mean kappa **−0.041**、12.35 分歧/研究、95% 是 `unique`，判定降级为 `describer`；同时暴露出读全视图让 reader_a 阳性标签从 3.20 涨到 10.22
 - [x] **合并层按标签集收窄比对范围** —— `COMPARISON_LABELS` + `in_vocabulary` 标记；**假设被证伪**（窄 kappa −0.092 比宽 −0.030 更差），但换来仲裁预算的正确排序与一个本体映射 bug 的修复
 - [ ] **校准 reader_a 的工作点（完成一半）** —— 已量出并落地报告端逐标签阈值：阳性标签从 10.22 降到 4.05/研究（LungOpacity 在报告正常的片子上从 90% 阳性降到 10%）。**但验收指标未达到**：G1 的 FPR 仍是 0.808，因为它由气胸在告警阈值上的表现决定，而全语料只有 19 例弱阳性气胸、低于门槛——这批数据没能力校准它。剩下的一半需要一个气胸标注足够的语料，见[诚实的局限](#reader_a-的工作点量出来了改了一半)
-- [ ] **P4 生成轨** —— 云端 image-edit 已实测走不通（见上）。要重开得换受掩膜约束的 inpainting 或胸片专用生成器，届时才谈得上合成稀有阳性（纵隔气肿）与时序序列；本机 Intel 双核无 MPS，本地 SD 不现实
+- [ ] **P4 生成轨** —— 云端 image-edit 已实测走不通（见上）。要重开得换受掩膜约束的 inpainting 或胸片专用生成器，届时才谈得上合成稀有阳性（纵隔气肿）与时序序列；本地跑扩散模型需要 GPU/MPS，这条路线按云端评估
 - [ ] **烧录像素标注检测** —— 标签级脱敏对渲染进像素的 PHI 完全无效，需要 OCR
 - [x] **仲裁预算与分歧量对齐** —— 词表内分歧 3.38/研究落在 12 的预算内；仲裁按「两读者都表了态」优先，词表外的排后但一条不丢
 - [x] **P4 反事实对照图探路** —— 云端 image-edit（`Qwen/Qwen-Image-Edit`）实测：**对照组把结论否掉了**，概率下降来自编辑动作本身而非病灶移除，见[诚实的局限](#p4-反事实对照图云端-image-edit-这条路实测走不通)
