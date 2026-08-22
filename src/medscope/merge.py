@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from medscope.config import Settings
 from medscope.ontology import COMPARISON_LABELS, canonical
 from medscope.state import Description, Disagreement, Finding, ReadResult
+from medscope.thresholds import report_threshold
 
 
 def _split_mapped(findings: list[Finding]) -> tuple[dict[str, Finding], list[Finding]]:
@@ -89,6 +90,11 @@ def _merge_finding(fa: Finding, fb: Finding, label: str) -> Finding:
 def _merge_reader(
     read_a: ReadResult, read_b: ReadResult, threshold: float
 ) -> tuple[list[Finding], list[Disagreement], float]:
+    """`threshold` is the caller's global default; the per-label measured
+    operating point wins where one exists (see `medscope.thresholds`).
+    Both readers are judged by the same number for a given label -- a
+    per-label threshold applied on one side only would turn a calibration
+    into a systematic disagreement."""
     a_mapped, a_unmapped = _split_mapped(read_a.findings)
     b_mapped, b_unmapped = _split_mapped(read_b.findings)
 
@@ -107,8 +113,9 @@ def _merge_reader(
         # names only what it saw. Treating each unmentioned negative as a
         # conflict produced ~17 per study against a real VLM -- see
         # test_one_sided_negative_call_is_agreement_not_a_unique_disagreement.
+        label_threshold = report_threshold(label, threshold)
         if fa is None:
-            if fb.prob >= threshold:
+            if fb.prob >= label_threshold:
                 disagreements.append(
                     Disagreement(
                         label=label, a_prob=None, b_prob=fb.prob, kind="unique",
@@ -119,7 +126,7 @@ def _merge_reader(
                 findings.append(fb)
             continue
         if fb is None:
-            if fa.prob >= threshold:
+            if fa.prob >= label_threshold:
                 disagreements.append(
                     Disagreement(
                         label=label, a_prob=fa.prob, b_prob=None, kind="unique",
@@ -130,8 +137,8 @@ def _merge_reader(
                 findings.append(fa)
             continue
 
-        a_pos = fa.prob >= threshold
-        b_pos = fb.prob >= threshold
+        a_pos = fa.prob >= label_threshold
+        b_pos = fb.prob >= label_threshold
         if a_pos != b_pos:
             disagreements.append(
                 Disagreement(
@@ -170,8 +177,8 @@ def _merge_reader(
             )
         )
 
-    positive_a = {label for label, f in a_mapped.items() if f.prob >= threshold}
-    positive_b = {label for label, f in b_mapped.items() if f.prob >= threshold}
+    positive_a = {l for l, f in a_mapped.items() if f.prob >= report_threshold(l, threshold)}
+    positive_b = {l for l, f in b_mapped.items() if f.prob >= report_threshold(l, threshold)}
     # Narrowed to the labels the two readers can actually be compared on --
     # see `ontology.COMPARISON_LABELS` for the measurement behind it. The
     # wide universe is still computed, by `agreement()` below, and reported
@@ -237,7 +244,7 @@ def _merge_describer(
     # shortcut: kappa is 1.0 by definition whenever the two label sets are
     # identical, which is exactly true here since reader_b contributes no
     # judgement of its own.
-    positive_a = {label for label, f in a_mapped.items() if f.prob >= threshold}
+    positive_a = {l for l, f in a_mapped.items() if f.prob >= report_threshold(l, threshold)}
     universe = set(a_mapped)
     kappa, _note = cohens_kappa(positive_a, positive_a, universe)
 
@@ -342,8 +349,8 @@ def agreement(read_a: ReadResult, read_b: ReadResult, threshold: float) -> Agree
     a_mapped, _a_unmapped = _split_mapped(read_a.findings)
     b_mapped, _b_unmapped = _split_mapped(read_b.findings)
 
-    positive_a = {label for label, f in a_mapped.items() if f.prob >= threshold}
-    positive_b = {label for label, f in b_mapped.items() if f.prob >= threshold}
+    positive_a = {l for l, f in a_mapped.items() if f.prob >= report_threshold(l, threshold)}
+    positive_b = {l for l, f in b_mapped.items() if f.prob >= report_threshold(l, threshold)}
     wide_universe = set(a_mapped) | set(b_mapped)
     narrow_universe = wide_universe & COMPARISON_LABELS
 

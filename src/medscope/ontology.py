@@ -35,6 +35,10 @@ CANONICAL: dict[str, str] = {
     # -- Atelectasis --
     "Atelectasis": "Atelectasis",
     "肺不张": "Atelectasis",
+    # Open-i's own MeSH major term for this finding (330 studies) -- the
+    # corpus indexes it with the anatomical qualifier, and an exact-match
+    # lookup does not see through that.
+    "Pulmonary Atelectasis": "Atelectasis",
     # -- Consolidation --
     "Consolidation": "Consolidation",
     "实变": "Consolidation",
@@ -108,6 +112,8 @@ CANONICAL: dict[str, str] = {
     "锁骨骨折": "Fracture",
     "Vertebral Fracture": "Fracture",
     "椎体骨折": "Fracture",
+    # MeSH's inverted heading, as it appears in the corpus (89 studies).
+    "Fractures, Bone": "Fracture",
     # -- LungOpacity --
     "Lung Opacity": "LungOpacity",
     "肺部阴影": "LungOpacity",

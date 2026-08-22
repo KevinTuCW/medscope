@@ -13,6 +13,7 @@ from medscope.config import Settings
 from medscope.critical import triage
 from medscope.merge import agreement, cohens_kappa, merge_reads
 from medscope.ontology import COMPARISON_LABELS, CRITICAL_LABELS
+from medscope.thresholds import report_threshold
 from medscope.state import Description, Finding, ReadResult
 
 
@@ -435,3 +436,35 @@ def test_narrowing_does_not_touch_the_critical_channel():
     alerts = triage(list(read_a.findings) + list(read_b.findings), settings)
 
     assert "Pneumothorax" in {a.label for a in alerts}
+
+
+# ---------------------------------------------------------------------------
+# Per-label operating points
+# ---------------------------------------------------------------------------
+
+
+def test_calibrated_label_uses_its_own_threshold_not_the_global_one():
+    """LungOpacity fires on 90% of report-normal studies at 0.5 -- its
+    measured threshold is 0.842. A score between the two must be negative
+    now, and would have been positive before."""
+    assert report_threshold("LungOpacity", 0.5) > 0.6
+
+    read_a = _labelled_read("a", [("LungOpacity", 0.7)])
+    read_b = _labelled_read("b", [])
+
+    findings, disagreements, _kappa = merge_reads(read_a, read_b, 0.5)
+
+    assert disagreements == []  # 0.7 is below LungOpacity's own threshold
+    assert [f.label for f in findings] == ["LungOpacity"]
+
+
+def test_critical_label_threshold_is_never_raised_above_the_default():
+    """The measurement would have moved Pneumothorax to 0.511 on the back
+    of 19 weak positives. Making a life-threatening finding harder to
+    report on that evidence is a guess in the dangerous direction."""
+    for label in CRITICAL_LABELS:
+        assert report_threshold(label, 0.5) <= 0.5
+
+
+def test_uncalibrated_label_falls_back_to_the_caller_threshold():
+    assert report_threshold("NotALabel", 0.42) == 0.42

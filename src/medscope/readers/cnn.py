@@ -38,6 +38,7 @@ from medscope.config import Settings
 from medscope.ontology import canonical
 from medscope.state import Finding, ReadResult
 from medscope.utils import clamp
+from medscope.thresholds import report_threshold
 from medscope.views import order_views
 
 if TYPE_CHECKING:
@@ -230,7 +231,12 @@ class CNNReader:
         """
         return self.read_study([image_path])
 
-    def read_study(self, image_paths: list[str | Path] | list[Path] | list[str]) -> ReadResult:
+    def read_study(
+        self,
+        image_paths: list[str | Path] | list[Path] | list[str],
+        *,
+        localize: bool = True,
+    ) -> ReadResult:
         """Read **every** film of a study and report one finding per label.
 
         A radiologist reads a study, not a file. Reading only the first
@@ -284,7 +290,9 @@ class CNNReader:
             ref, tensor, _ = reads[idx]
             label = canonical(raw_label)
             locus = None
-            if prob >= self.settings.cnn_prob_threshold:
+            if localize and prob >= report_threshold(
+                label if label is not None else raw_label, self.settings.cnn_prob_threshold
+            ):
                 # Grad-CAM costs a backward pass each -- only run it for
                 # labels the reader is actually calling positive.
                 locus = _gradcam(tensor, raw_label)

@@ -12,7 +12,7 @@
 [![Qwen3-VL](https://img.shields.io/badge/reader__b-Qwen3--VL--32B-6B46C1.svg)](https://github.com/QwenLM/Qwen3-VL)
 [![Langfuse](https://img.shields.io/badge/Langfuse-tracing-fbbf24.svg)](https://langfuse.com/)
 [![CI](https://img.shields.io/badge/CI-tests%20%2B%20eval%20gate-2088FF.svg?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
-[![tests](https://img.shields.io/badge/tests-395%20passed-brightgreen.svg)](#-评测)
+[![tests](https://img.shields.io/badge/tests-398%20passed-brightgreen.svg)](#-评测)
 [![PHI leaks](https://img.shields.io/badge/PHI%20leaks-0-brightgreen.svg)](#-评测)
 [![gate](https://img.shields.io/badge/eval%20gate-PASS%20%C2%B7%20AUC%200.659-yellow.svg)](#-评测)
 
@@ -130,7 +130,7 @@ python3.12 -m venv .venv                  # torch 在 3.14 上无可靠 wheel
 .venv/bin/pip install -e ".[cv,llm]"
 
 # 2. 跑测试（离线、hermetic、零 key）
-PYTHONPATH=src .venv/bin/pytest -q        # 395 passed, 3 deselected in ~85s
+PYTHONPATH=src .venv/bin/pytest -q        # 398 passed, 3 deselected in ~47s
 PYTHONPATH=src .venv/bin/pytest -m slow   # 2 个真权重用例 + 1 个真 DICOM 用例（无片则跳过）
 
 # 3. 跑评测门禁
@@ -211,7 +211,7 @@ make eval        # 或 EVAL_ARGS="--suite critical" make eval
 | `robustness` **G5 鲁棒性** | **硬门** | 注入拦截率 = 1.0，不变性 = 1.0 | ✅ PASS (n=9) |
 | `golden` | soft | 端到端产出完整度 | ✅ PASS (n=3) |
 
-单测：**395 passed, 3 deselected**（`slow` 标记的真权重用例默认不跑）。
+单测：**398 passed, 3 deselected**（`slow` 标记的真权重用例默认不跑）。
 
 ### 一条原则
 
@@ -390,6 +390,40 @@ make eval        # 或 EVAL_ARGS="--suite critical" make eval
 
 所以当前状态是：**判定规则照常跑、照常输出建议，配置不自动跟随它**。要按建议运行就显式设 `READER_B_MODE=describer`（两种模式都有测试覆盖）。这条会一直摆在这里，直到 reader_a 的工作点被校准、这个决策能建立在一个干净的数上。
 
+### reader_a 的工作点：量出来了，改了一半
+
+`CNN_PROB_THRESHOLD = 0.5` 从来不是「概率过半」，而是恰好落在 torchxrayvision 的 `op_norm` 把每个标签自身工作点映射到的那个位置。也就是说「阳性」一直等于「越过了 torchxrayvision 选的工作点」，与 Open-i 这批数据毫无关系。
+
+拿语料自己来量：Open-i 用 MeSH 主词条给每份研究做了索引，其中 **1379 份被索引为 `normal`**。以 600 份 `normal` 作阴性总体、MeSH 词条作弱阳性标签（`scripts/calibrate_operating_points.py`，1500 份研究、约 16 分钟 CPU、零 API 调用），先看**当前阈值在「报告说正常」的片子上的阳性率**：
+
+| 标签 | 报告正常却被叫阳性 | AUC（弱标签） | 弱阳性数 |
+| --- | --- | --- | --- |
+| Emphysema | **91.2%** | 0.748 | 59 |
+| LungOpacity | **90.0%** | — | 0 |
+| Infiltration | **81.5%** | — | 0 |
+| Mass | 79.5% | 0.907 | 14 |
+| Fibrosis | 67.8% | 0.910 | 17 |
+| Nodule | 66.0% | 0.621 | 104 |
+| **Pneumothorax** | **55.3%** | 0.674 | 19 |
+| Cardiomegaly | 11.7% | 0.884 | 322 |
+| Hernia | 1.3% | — | 0 |
+
+**九成正常胸片被叫成肺部阴影的标签，不是在检测，是在断言。** 这一列也顺带解释了此前所有难看的数字：分歧 12.35 条/研究、kappa −0.03、G1 的 FPR 0.808。
+
+按「在报告正常的总体上把阳性率压到 10%」定逐标签报告阈值（`data/operating_points.json`，由 `medscope/thresholds.py` 统一读取，`readers/cnn.py` 与 `merge.py` 共用一个定义），实测效果：
+
+| | 校准前 | 校准后 |
+| --- | --- | --- |
+| reader_a 阳性标签数 / 研究（40 份） | 10.22 | **4.05** |
+| LungOpacity 阈值 | 0.500 | 0.842 |
+| Infiltration 阈值 | 0.500 | 0.550 |
+
+两条硬规矩写在代码里：**危急标签的报告阈值只许降不许升**（校准会把气胸从 0.500 抬到 0.511，而支撑它的只有 19 例弱阳性——低于本语料自己的 25 例门槛；拿这种证据把一个能致命的发现变得更难进报告，不是校准，是往危险方向猜）；**告警通道完全不受影响**，`critical.triage` 读的是 `CRITICAL_THRESHOLD`（0.3），从不读这张表——所以进不了报告的危急发现照样告警。
+
+**验收指标没达到，这里如实记账。** 路线图给这项定的验收是「G1 的 FPR 从 0.808 真降下来且召回仍 27/27」。跑完 `make eval`：召回仍是 27/27，**FPR 仍是 0.808，一点没动**。原因是结构性的：G1 的 FPR 由气胸在告警阈值 0.3 上的表现决定，而**全语料只有 19 例弱阳性气胸，低于门槛，这批数据没有能力校准它的告警阈值**。这项因此仍然挂在路线图上——已经拿到的是报告端的一半，另一半需要一个有足够气胸标注的语料，Open-i 给不了。
+
+弱标签的性质也得说清楚：MeSH 索引来自**报告文本**而非像素。一份「正常」是当班医生认为正常，不是像素级金标准；好处是它与 CNN 完全独立（模型从没见过文本），坏处是它继承了报告本身的漏诊。
+
 ### `critical_fpr` 是真测量，但不是校准过的假警报率
 
 它现在确实在量「reader_a 读真实像素时，多少阴性研究被误报」（0.808）。但金标准的 26 例阴性是按报告文本挑的，不是按分布抽的，所以这个数不能当生产环境的假警报率读。它仍只是软警告——recall 是唯一硬要求。
@@ -455,6 +489,7 @@ medscope/
 │   │   ├── studies/          # 3 例研究（图 + ecgen-radiology 配对报告）
 │   │   ├── qc/               # 质控样图（正位/侧位对称性实测基线）
 │   │   └── guidelines.json   # 仲裁 RAG 语料（自行合成的教学材料，非真实指南）
+│   ├── operating_points.json # 逐标签工作点实测（600 份报告正常 + MeSH 弱标签）
 │   └── evals/
 │       ├── critical.json     # G1 金标准：53 例全人工核对（27 阳 / 26 阴）
 │       └── phi.json          # G4 夹具（由 synth_phi 注入器生成，非正则反推）
@@ -464,6 +499,7 @@ medscope/
 │   ├── bootstrap.py          # Deps 装配：样例 / 真实后端
 │   ├── state.py              # StudyState / Finding / Description / Disagreement / CriticalAlert
 │   ├── ontology.py           # 标签本体；CRITICAL_LABELS 是 G1 单一真源；COMPARISON_LABELS 是比对词表
+│   ├── thresholds.py         # 逐标签报告阈值：唯一读取处；危急标签只许降不许升
 │   ├── data/
 │   │   ├── dicom.py          # 真实 DICOM 读取：MONOCHROME1 反相 / rescale / file meta 组
 │   │   ├── openi.py          # 数据集加载与图文配对
@@ -495,9 +531,10 @@ medscope/
 │   ├── fetch_openi.py        # 数据集拉取（Range 前缀；--dicom-bytes 取真实 DICOM，默认绕开代理）
 │   ├── build_critical_goldset.py  # G1 金标准候选生成 —— 候选须人工核对后才入库
 │   ├── calibrate_vlm.py      # reader_b 基线校准；离线模式拒绝出结论并 exit 2
+│   ├── calibrate_operating_points.py  # reader_a 工作点实测（零 API，--recompute-from 免重跑）
 │   ├── counterfactual_probe.py    # P4 探路：反事实编辑 vs 对照编辑，无 key 拒跑
 │   └── gen_phi_fixture.py    # G4 夹具生成
-├── tests/                    # pytest（395 passed, 3 deselected）+ conftest（隔离真 .env）
+├── tests/                    # pytest（398 passed, 3 deselected）+ conftest（隔离真 .env）
 ├── .github/workflows/ci.yml
 ├── Dockerfile                # 权重预取放在 USER app 之后，否则缓存落 root 家目录不可见
 └── docker-compose.yml
@@ -511,7 +548,7 @@ medscope/
 | --- | --- | --- |
 | `OPENI_ROOT` | `data/openi` | 数据集根目录 |
 | `CNN_WEIGHTS` | `densenet121-res224-all` | reader_a 权重集；类目数运行时读取，**不要硬编码 14 类** |
-| `CNN_PROB_THRESHOLD` | `0.5` | 进报告的阈值（= 模型工作点，见「`prob` 不是概率」） |
+| `CNN_PROB_THRESHOLD` | `0.5` | 进报告的**兜底**阈值；有实测工作点的标签走 `data/operating_points.json`（见[工作点校准](#reader_a-的工作点量出来了改了一半)） |
 | `CRITICAL_THRESHOLD` | `0.3` | 危急值告警阈值，**刻意低于**报告阈值 |
 | `READER_B_MODE` | `reader` | `reader`（同侪）\| `describer`（降级为描述器）。**校准判定输出的是 `describer`，默认值仍是 `reader`，这个不一致是刻意的**——见[诚实的局限](#校准判定说降级而默认仍是-reader) |
 | `VLM_MODEL` / `VLM_BASE_URL` / `VLM_API_KEY` | 空 | reader_b 的 OpenAI 兼容端点；**填前用 `/models` 核对 id，不要凭记忆猜** |
@@ -532,7 +569,7 @@ medscope/
 - [x] **让 G1 的红字有意义地变绿** —— 确定性选图 + 按 study 读全部视图 + 停止裁掉肺尖与肋膈角：27/27，**且 FPR 与旧实现持平（21/26）**；AUC 0.659 这个事实同时写进了徽章、评测表与[诚实的局限](#-诚实的局限)
 - [x] **reader_b 规模化校准** —— 40 份真实研究：mean kappa **−0.041**、12.35 分歧/研究、95% 是 `unique`，判定降级为 `describer`；同时暴露出读全视图让 reader_a 阳性标签从 3.20 涨到 10.22
 - [x] **合并层按标签集收窄比对范围** —— `COMPARISON_LABELS` + `in_vocabulary` 标记；**假设被证伪**（窄 kappa −0.092 比宽 −0.030 更差），但换来仲裁预算的正确排序与一个本体映射 bug 的修复
-- [ ] **校准 reader_a 的工作点** —— LungOpacity 40/40 是报告阈值 0.5 恰好等于模型 `op_threshold` 的直接后果。**验收看两个数：G1 的 FPR 从 0.808 真降下来，且召回仍为 27/27**——靠调阈值换来的下降不算数。在这个数被校准前，任何 kappa 都同时是在量它
+- [ ] **校准 reader_a 的工作点（完成一半）** —— 已量出并落地报告端逐标签阈值：阳性标签从 10.22 降到 4.05/研究（LungOpacity 在报告正常的片子上从 90% 阳性降到 10%）。**但验收指标未达到**：G1 的 FPR 仍是 0.808，因为它由气胸在告警阈值上的表现决定，而全语料只有 19 例弱阳性气胸、低于门槛——这批数据没能力校准它。剩下的一半需要一个气胸标注足够的语料，见[诚实的局限](#reader_a-的工作点量出来了改了一半)
 - [ ] **P4 生成轨** —— 云端 image-edit 已实测走不通（见上）。要重开得换受掩膜约束的 inpainting 或胸片专用生成器，届时才谈得上合成稀有阳性（纵隔气肿）与时序序列；本机 Intel 双核无 MPS，本地 SD 不现实
 - [ ] **烧录像素标注检测** —— 标签级脱敏对渲染进像素的 PHI 完全无效，需要 OCR
 - [x] **仲裁预算与分歧量对齐** —— 词表内分歧 3.38/研究落在 12 的预算内；仲裁按「两读者都表了态」优先，词表外的排后但一条不丢
