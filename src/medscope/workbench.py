@@ -70,6 +70,7 @@ from medscope.ontology import canonical
 from medscope.runner import run_study
 from medscope.state import StudyState
 from medscope.store import RunStore, build_run_store
+from medscope.views import primary_view
 
 SAMPLES_DIR = Path("data/samples/studies")
 
@@ -106,9 +107,16 @@ def find_sample_study(study_id: str) -> Study:
 
 
 def build_initial_state(study: Study) -> StudyState:
+    """Seed the pipeline with the whole study, not one file of it.
+
+    `image_paths[0]` used to decide which film got read; it is filesystem
+    order wearing a subscript. `views.primary_view` picks the film to
+    display (and to hand the single-image consumers) from the pixels.
+    """
     return StudyState(
         study_id=study.study_id,
-        image_path=str(study.image_paths[0]),
+        image_path=str(primary_view(study.image_paths)),
+        image_paths=[str(p) for p in study.image_paths],
         indication=study.indication,
     )
 
@@ -169,10 +177,25 @@ def _image_data_url(image_path: str) -> str | None:
 
 
 def _image_block(state: StudyState) -> dict:
+    """The displayed film, plus only the loci that belong on it.
+
+    reader_a now reads every film of a study, so a Grad-CAM may have been
+    computed on a film that is not the one on screen. Drawing it anyway
+    would put a confident box over anatomy it was never computed from --
+    the same audit-view failure the arbitration records exist to avoid: a
+    view that misreports is worse than one that reports less. A locus is
+    rendered only when its `image_ref` is the displayed film, or when the
+    finding carries no attribution at all (single-image readers). The rest
+    are counted, so "fewer boxes" never reads as "nothing found".
+    """
     reader_a_loci = []
+    loci_on_other_views = 0
     if state.read_a is not None:
         for finding in state.read_a.findings:
             if finding.locus is None:
+                continue
+            if finding.image_ref and finding.image_ref != state.image_path:
+                loci_on_other_views += 1
                 continue
             reader_a_loci.append(
                 {
@@ -186,6 +209,8 @@ def _image_block(state: StudyState) -> dict:
     return {
         "path": state.image_path,
         "data_url": _image_data_url(state.image_path),
+        "views": list(state.image_paths),
+        "loci_on_other_views": loci_on_other_views,
         # reader_b (the VLM) never localizes -- see module docstring.
         "readers": {"a": reader_a_loci, "b": []},
     }

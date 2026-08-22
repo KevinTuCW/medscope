@@ -19,6 +19,13 @@ class Finding(BaseModel):
     locus: dict | None = None  # normalized coords cx/cy/r; None if reader gives no localization
     evidence_id: str = ""  # stable id that report sentences cite; auto-derived if left blank
     raw_label: str = ""  # reader's original wording, kept for audit
+    # Which film of the study this reading came from. Empty for readers that
+    # only ever see one image (reader_b, the arbiter). Once reader_a reads
+    # every view of a study, `locus` on its own becomes a trap: a Grad-CAM
+    # computed on the lateral film and drawn over the frontal one is a
+    # confidently wrong overlay. The coordinates only mean anything
+    # alongside the image they were computed on.
+    image_ref: str = ""
     notes: list[str] = Field(default_factory=list)  # carries VLM description text in describer mode
     # Set by the arbiter (Task 2.4) for a disagreement it could not resolve
     # (verdict UNCERTAIN) or never got to (budget exceeded): the finding is
@@ -107,7 +114,15 @@ class ReportDraft(BaseModel):
 
 class StudyState(BaseModel):
     study_id: str
+    #: The film shown in the workbench and handed to the single-image
+    #: consumers (reader_b, the arbiter, the report writer). Chosen by
+    #: `views.primary_view`, never by filesystem order.
     image_path: str = ""
+    #: Every film of the study. reader_a reads all of them -- a radiologist
+    #: reads a study, not a file. Left empty by callers that genuinely have
+    #: one image; reader_a then falls back to `image_path`, so no consumer
+    #: has to keep the two fields in sync by hand.
+    image_paths: list[str] = Field(default_factory=list)
     history_text: str = ""
     indication: str = ""
     deid_report: dict = Field(default_factory=dict)

@@ -99,10 +99,16 @@ class ReaderAClient(Protocol):
     directly. A separate Protocol (rather than importing `CNNReader` here)
     keeps this module -- and anything that imports it -- from paying a torch
     import just to build the graph; tests inject a plain stub with the same
-    `.read()` method.
+    methods.
+
+    Both methods are part of the shape: the graph calls `read_study` (a
+    study is a set of films), while `read` stays the single-film entry
+    point used by callers that genuinely have one image.
     """
 
     def read(self, image_path: str | Path) -> ReadResult: ...
+
+    def read_study(self, image_paths: list[str | Path]) -> ReadResult: ...
 
 
 @dataclass(frozen=True)
@@ -130,6 +136,7 @@ class GraphState(TypedDict, total=False):
 
     study_id: str
     image_path: str
+    image_paths: list[str]
     history_text: str
     indication: str
     deid_report: dict
@@ -162,6 +169,17 @@ class GraphState(TypedDict, total=False):
 
 def _trace_event(node: str) -> dict:
     return {"node": node, "ts": time.time()}
+
+
+def _study_films(state: GraphState) -> list[str]:
+    """Every film of the study, falling back to the single displayed one.
+
+    The fallback is what keeps `image_paths` from becoming a second field
+    every caller must remember to populate: a state carrying only
+    `image_path` still gets read, it just gets read as a one-film study.
+    """
+    films = [p for p in (state.get("image_paths") or []) if p]
+    return films or [state["image_path"]]
 
 
 def _draft_complete(draft: ReportDraft | None) -> bool:
@@ -268,7 +286,11 @@ def build_graph(deps: GraphDeps):
 
     # -- reader_a / reader_b (independent) -----------------------------------
     def _reader_a(state: GraphState) -> dict:
-        result = deps.cnn_reader.read(state["image_path"])
+        # reader_a reads the whole study; reader_b (and the arbiter, and the
+        # report writer) still see one film. That asymmetry is a cost
+        # decision, not an oversight -- it is named in the README rather
+        # than left for someone to discover from the traces.
+        result = deps.cnn_reader.read_study(_study_films(state))
         return {"read_a": result, "trace_events": [_trace_event("reader_a")]}
 
     def _reader_b(state: GraphState) -> dict:

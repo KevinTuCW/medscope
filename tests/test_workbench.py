@@ -47,6 +47,9 @@ class FakeReaderA:
         self.calls = 0
 
     def read(self, image_path) -> ReadResult:
+        return self.read_study([image_path])
+
+    def read_study(self, image_paths) -> ReadResult:
         self.calls += 1
         return ReadResult(reader="a", findings=list(self._findings), latency_ms=7)
 

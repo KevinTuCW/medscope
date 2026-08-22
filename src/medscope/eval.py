@@ -58,6 +58,7 @@ from medscope.guardrails import input as guardrails_input_mod
 from medscope.ontology import CRITICAL_LABELS
 from medscope.runner import run_study
 from medscope.state import Finding, StudyState
+from medscope.views import primary_view
 
 CRITICAL_GOLDSET_PATH = Path("data/evals/critical.json")
 PHI_FIXTURE_PATH = Path("data/evals/phi.json")
@@ -133,8 +134,8 @@ def _apply_min_cases(result: SuiteResult, min_cases: int) -> SuiteResult:
 # ---------------------------------------------------------------------------
 
 
-def _resolve_case_image(case: dict, settings: Settings) -> Path | None:
-    """Resolve a gold-set case's image pattern to a real file, if present.
+def _resolve_case_images(case: dict, settings: Settings) -> list[Path]:
+    """Resolve a gold-set case's image pattern to **every** film present.
 
     `critical.json` records `image_path` as a filename *pattern*
     (`CXR1021_*.png`) rather than a resolved path, because which images are
@@ -142,22 +143,26 @@ def _resolve_case_image(case: dict, settings: Settings) -> Path | None:
     fetched. Resolving it per run is what keeps the suite's scope caveat
     honest as that changes underneath us.
 
-    `rglob` returns filesystem order, so a study with both a frontal and a
-    lateral film resolves to whichever the OS hands back first. That makes
-    the measurement itself unstable and is tracked separately; this
-    function is not the place to decide which view to read.
+    This used to be `next(root.rglob(pattern))` -- filesystem order, i.e.
+    whichever film the OS handed back first out of the 2.4 films the
+    average gold-set study carries. That single expression held two
+    defects: the score depended on OS enumeration, and confirmed-positive
+    cases were being graded on films that don't show the finding. `rglob`
+    is still the matcher, but the result comes back sorted and whole.
+    Deciding what to read *first* is `views.order_views`'s job; deciding
+    which films to read is nobody's -- reader_a reads all of them.
     """
     pattern = case.get("image_path")
     if not pattern:
-        return None
+        return []
     root = Path(settings.openi_root)
     if not root.is_dir():
-        return None
-    return next(root.rglob(pattern), None)
+        return []
+    return sorted(root.rglob(pattern))
 
 
 def _positive_case_image_exists(case: dict, settings: Settings) -> bool:
-    return _resolve_case_image(case, settings) is not None
+    return bool(_resolve_case_images(case, settings))
 
 
 def run_critical_suite(
@@ -212,15 +217,15 @@ def run_critical_suite(
 
     for case in cases:
         expected: list[str] = case["expected_critical"]
-        image = _resolve_case_image(case, settings)
+        images = _resolve_case_images(case, settings)
 
-        if image is None:
+        if not images:
             for label in expected:
                 unrunnable.append({"study_id": case["study_id"], "label": label, "reason": "no local image"})
             continue
 
-        read_result = reader.read(image)
-        alerts = critical_mod.triage(read_result.findings, settings, image_ref=str(image))
+        read_result = reader.read_study(images)
+        alerts = critical_mod.triage(read_result.findings, settings, image_ref=str(images[0]))
         alert_labels = {a.label for a in alerts}
 
         if not expected:
@@ -352,7 +357,8 @@ def run_sample_pipeline(
     for study in studies:
         state = StudyState(
             study_id=study.study_id,
-            image_path=str(study.image_paths[0]),
+            image_path=str(primary_view(study.image_paths)),
+            image_paths=[str(p) for p in study.image_paths],
             indication=study.indication,
         )
         deps = bootstrap.build_sample_deps(settings, impression_text=study.impression_text)

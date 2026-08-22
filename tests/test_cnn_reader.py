@@ -16,7 +16,9 @@ pyproject.toml `addopts`); run it explicitly with `-m slow`.
 
 from pathlib import Path
 
+import numpy as np
 import pytest
+from PIL import Image
 
 from medscope.config import Settings
 from medscope.readers import cnn as cnn_mod
@@ -117,6 +119,145 @@ def test_gradcam_only_called_for_above_threshold_labels(monkeypatch, reader):
     settings = Settings()
     expected = {label for label, prob in STUB_PROBS.items() if prob >= settings.cnn_prob_threshold}
     assert set(calls) == expected
+
+
+# ---------------------------------------------------------------------------
+# Multi-film reading: a radiologist reads a study, not a file
+# ---------------------------------------------------------------------------
+
+
+def _film(tmp_path: Path, name: str, fill: int) -> Path:
+    """A flat film of a given brightness -- brightness is the handle the
+    stubbed `_infer` below uses to tell one film from another."""
+    path = tmp_path / name
+    Image.new("L", (256, 320), color=fill).save(path)
+    return path
+
+
+@pytest.fixture
+def two_films(tmp_path: Path) -> tuple[Path, Path]:
+    """Two films of one study: `dark` and `bright`."""
+    return _film(tmp_path, "CXR5_IM-0001-1001.png", 40), _film(tmp_path, "CXR5_IM-0001-2001.png", 200)
+
+
+@pytest.fixture
+def per_film_reader(monkeypatch):
+    """reader_a whose stubbed probabilities differ per film.
+
+    The bright film calls a confident pneumothorax and a negative
+    cardiomegaly; the dark film calls the reverse. Any implementation that
+    reads one film of the study gets one of those two answers, so the
+    tests below can tell "read the study" from "read a file".
+    """
+
+    def _infer_by_brightness(tensor):
+        bright = float(tensor.mean()) > 0
+        return {
+            "Pneumothorax": 0.91 if bright else 0.02,
+            "Cardiomegaly": 0.10 if bright else 0.77,
+        }
+
+    monkeypatch.setattr(cnn_mod, "_infer", _infer_by_brightness)
+    monkeypatch.setattr(cnn_mod, "_gradcam", _stub_gradcam)
+    return CNNReader(settings=Settings())
+
+
+def test_read_study_takes_the_max_across_films(per_film_reader, two_films):
+    """A finding visible on one projection and not another is still a
+    finding. Reading a single film of a multi-film study is what cost G1
+    five confirmed-positive cases."""
+    dark, bright = two_films
+    by_label = {f.label: f for f in per_film_reader.read_study([dark, bright]).findings}
+
+    assert by_label["Pneumothorax"].prob == pytest.approx(0.91)
+    assert by_label["Cardiomegaly"].prob == pytest.approx(0.77)
+
+
+def test_read_study_attributes_each_finding_to_the_film_it_was_seen_on(per_film_reader, two_films):
+    dark, bright = two_films
+    by_label = {f.label: f for f in per_film_reader.read_study([dark, bright]).findings}
+
+    assert by_label["Pneumothorax"].image_ref == str(bright)
+    assert by_label["Cardiomegaly"].image_ref == str(dark)
+
+
+def test_read_study_is_independent_of_the_order_films_arrive_in(per_film_reader, two_films):
+    """Same study, same bytes, same answer -- whatever order the caller (or
+    the filesystem) hands the films over in."""
+    dark, bright = two_films
+
+    def _shape(result):
+        return sorted((f.label, round(f.prob, 6), f.image_ref) for f in result.findings)
+
+    assert _shape(per_film_reader.read_study([dark, bright])) == _shape(
+        per_film_reader.read_study([bright, dark])
+    )
+
+
+def test_gradcam_runs_on_the_film_that_won_the_label(monkeypatch, per_film_reader, two_films):
+    """A locus computed on one film and attributed to another is a
+    confidently wrong overlay -- worse than no overlay at all."""
+    dark, bright = two_films
+    seen: dict[str, float] = {}
+
+    def _tracking_gradcam(tensor, label):
+        seen[label] = float(tensor.mean())
+        return {"cx": 0.5, "cy": 0.5, "r": 0.1}
+
+    monkeypatch.setattr(cnn_mod, "_gradcam", _tracking_gradcam)
+    per_film_reader.read_study([dark, bright])
+
+    # Only the two above-threshold labels, each localized on its own film:
+    # xrv normalizes around mid-grey, so the bright film's tensor has a
+    # positive mean and the dark film's a negative one.
+    assert set(seen) == {"Pneumothorax", "Cardiomegaly"}
+    assert seen["Pneumothorax"] > 0
+    assert seen["Cardiomegaly"] < 0
+
+
+def test_read_study_records_which_films_it_read(per_film_reader, two_films):
+    """Without the films named in the audit trail, "reader_a read the
+    study" is an unverifiable claim."""
+    dark, bright = two_films
+    note = " ".join(per_film_reader.read_study([dark, bright]).notes)
+
+    assert dark.name in note and bright.name in note
+    assert "2 film" in note
+
+
+def test_read_delegates_to_read_study(per_film_reader, two_films):
+    _dark, bright = two_films
+
+    def _shape(result):
+        return [(f.label, f.prob, f.image_ref) for f in result.findings]
+
+    assert _shape(per_film_reader.read(bright)) == _shape(per_film_reader.read_study([bright]))
+
+
+def test_read_study_with_no_films_returns_an_empty_result(per_film_reader):
+    result = per_film_reader.read_study([])
+
+    assert result.findings == []
+    assert result.notes == ["reader_a received no films"]
+
+
+def test_preprocess_keeps_the_apices_and_costophrenic_angles(tmp_path: Path):
+    """No center crop: the top and bottom of a portrait film survive.
+
+    `XRayCenterCrop` squares the image by trimming the long axis, which on
+    Open-i's portrait films cuts the lung apices (where a pneumothorax
+    collects) and the costophrenic angles (where an effusion collects) --
+    the two findings G1 exists for. This test fails if the crop comes back.
+    """
+    arr = np.zeros((320, 128), dtype=np.uint8)
+    arr[:8, :] = 255  # a bright band along the very top edge only
+    path = tmp_path / "portrait.png"
+    Image.fromarray(arr, mode="L").save(path)
+
+    kept = cnn_mod._preprocess(path)
+    cropped = cnn_mod._preprocess(path, center_crop=True)
+
+    assert float(kept[0, 0, 0, :].max()) > float(cropped[0, 0, 0, :].max())
 
 
 @pytest.mark.slow

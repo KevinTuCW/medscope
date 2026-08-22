@@ -103,9 +103,19 @@ class _GoldLabelReader:
         self._patterns = [(case["image_path"], case["expected_critical"]) for case in cases]
 
     def read(self, image_path) -> ReadResult:
-        name = Path(image_path).name
+        return self.read_study([image_path])
+
+    def read_study(self, image_paths) -> ReadResult:
+        # Any film of the study identifies the study -- the suite hands
+        # over every film it resolved, not one of them.
+        names = [Path(p).name for p in image_paths]
         labels: list[str] = next(
-            (expected for pattern, expected in self._patterns if fnmatch(name, pattern)), []
+            (
+                expected
+                for pattern, expected in self._patterns
+                if any(fnmatch(name, pattern) for name in names)
+            ),
+            [],
         )
         if labels:
             findings = [

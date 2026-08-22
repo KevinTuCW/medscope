@@ -42,10 +42,14 @@ def triage(findings: list[Finding], settings: Settings, image_ref: str = "") -> 
     which pins this exact behaviour -- the load-bearing expression of the
     recall-over-precision asymmetry this module exists for.
 
-    `image_ref` is not part of `Finding` (a Finding is scoped to one
-    label's reading, not to the image path), so it's threaded through as
-    an explicit parameter here rather than reconstructed from the
-    findings. Defaults to `""` for callers that don't have it yet.
+    `image_ref` is the study-level fallback, not the answer. reader_a
+    reads every film of a study, so the finding that raised the alert
+    knows which film it was seen on -- and that is the film a radiologist
+    needs pulled up. An alert pointing at the study's display film while
+    the pneumothorax was seen on another projection sends someone to look
+    at the wrong picture. A finding's own `image_ref` therefore wins; this
+    parameter covers findings that carry no attribution (reader_b, and
+    states written before the field existed).
 
     Deduplication: if more than one reader's Finding calls the same
     critical label positive, this emits exactly one alert for that label
@@ -73,7 +77,7 @@ def triage(findings: list[Finding], settings: Settings, image_ref: str = "") -> 
                 prob=best.prob,
                 source=source,
                 detected_at=now,
-                image_ref=image_ref,
+                image_ref=best.image_ref or image_ref,
             )
         )
 

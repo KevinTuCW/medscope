@@ -51,15 +51,22 @@ SAMPLE_IMAGE = "data/samples/studies/images/CXR38_IM-1911-1001.png"
 
 
 class FakeReaderA:
-    """Stub for reader_a's client shape (`CNNReader.read`). Records calls so
-    the QC-hard-fail test can assert it was never invoked."""
+    """Stub for reader_a's client shape (`CNNReader.read`/`read_study`).
+    Records calls so the QC-hard-fail test can assert it was never invoked,
+    and records the films it was handed so a test can pin that the graph
+    passes the whole study rather than one file of it."""
 
     def __init__(self, findings: list[Finding]):
         self._findings = findings
         self.calls = 0
+        self.films_seen: list[str] = []
 
     def read(self, image_path) -> ReadResult:
+        return self.read_study([image_path])
+
+    def read_study(self, image_paths) -> ReadResult:
         self.calls += 1
+        self.films_seen = [str(p) for p in image_paths]
         return ReadResult(reader="a", findings=list(self._findings), latency_ms=1)
 
 
@@ -184,6 +191,39 @@ def _deps(
 
 def _state(image_path: str = SAMPLE_IMAGE, **kwargs) -> StudyState:
     return StudyState(study_id="CXR-test", image_path=image_path, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# reader_a gets the whole study
+# ---------------------------------------------------------------------------
+
+
+def test_reader_a_receives_every_film_of_the_study():
+    """The graph hands reader_a the study, not the film on screen.
+
+    reader_b, the arbiter and the report writer still see one image -- a
+    cost decision -- so this asymmetry is pinned here rather than left to
+    be rediscovered from a trace.
+    """
+    deps, reader_a, _vlm, _arbiter = _deps(reader_a_findings=[_finding("Cardiomegaly", 0.9)])
+    films = [SAMPLE_IMAGE, "data/samples/studies/images/CXR797_IM-2332-1001.png"]
+    state = _state(image_paths=films)
+
+    run_study(state, deps)
+
+    assert reader_a.films_seen == films
+
+
+def test_reader_a_falls_back_to_the_single_film_when_no_study_films_given():
+    """A state carrying only `image_path` is still readable -- as a
+    one-film study. Without the fallback, `image_paths` becomes a second
+    field every caller has to remember to populate, and forgetting it
+    would silently read nothing."""
+    deps, reader_a, _vlm, _arbiter = _deps(reader_a_findings=[_finding("Cardiomegaly", 0.9)])
+
+    run_study(_state(), deps)
+
+    assert reader_a.films_seen == [SAMPLE_IMAGE]
 
 
 # ---------------------------------------------------------------------------

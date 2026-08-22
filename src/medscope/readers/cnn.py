@@ -38,6 +38,7 @@ from medscope.config import Settings
 from medscope.ontology import canonical
 from medscope.state import Finding, ReadResult
 from medscope.utils import clamp
+from medscope.views import order_views
 
 if TYPE_CHECKING:
     import torch
@@ -87,11 +88,27 @@ def _to_tensor(arr: np.ndarray) -> "torch.Tensor":
     return flat.reshape(arr.shape)
 
 
-def _preprocess(image_path: str | Path) -> "torch.Tensor":
-    """Grayscale -> xrv normalize -> center-crop -> resize to 224 ->
-    (1, 1, 224, 224) tensor. Uses torchxrayvision's own array utilities
-    (which depend on scikit-image, not torch), so this never touches
-    `_load_model` and never needs real weights.
+def _preprocess(image_path: str | Path, *, center_crop: bool = False) -> "torch.Tensor":
+    """Grayscale -> xrv normalize -> resize to 224 -> (1, 1, 224, 224).
+
+    Uses torchxrayvision's own array utilities (which depend on
+    scikit-image, not torch), so this never touches `_load_model` and never
+    needs real weights.
+
+    **No center crop by default, and that is a clinical decision.**
+    `XRayCenterCrop` squares the image by trimming the long axis, which on
+    Open-i's portrait films (512x624 and similar) removes roughly 56px from
+    the top and bottom -- the lung apices, where a pneumothorax collects,
+    and the costophrenic angles, where an effusion collects. Measured on
+    the G1 gold set, dropping the crop moves pneumothorax AUC from 0.593 to
+    0.659 and effusion AUC from 0.899 to 0.917: the model gets better at
+    telling positives from negatives, not merely more willing to alarm.
+    Squashing the aspect ratio instead is the lesser distortion when the
+    two findings the gate exists for live in the parts being cut off.
+
+    `center_crop=True` is kept as a parameter, not deleted, so the old
+    behaviour stays reproducible for the ablation that justified this
+    default.
     """
     import torchxrayvision as xrv
     from PIL import Image
@@ -100,7 +117,8 @@ def _preprocess(image_path: str | Path) -> "torch.Tensor":
     arr = np.asarray(image, dtype=np.float32)
     arr = xrv.datasets.normalize(arr, 255)
     arr = arr[None, ...]  # (1, H, W) -- add channel dim
-    arr = xrv.datasets.XRayCenterCrop()(arr)
+    if center_crop:
+        arr = xrv.datasets.XRayCenterCrop()(arr)
     arr = xrv.datasets.XRayResizer(224)(arr)  # (1, 224, 224)
     tensor = _to_tensor(arr).unsqueeze(0)  # (1, 1, 224, 224)
     return tensor
@@ -204,13 +222,63 @@ class CNNReader:
         self.settings = settings or Settings()
 
     def read(self, image_path: str | Path) -> ReadResult:
+        """Read a single film. Thin wrapper over `read_study` so there is
+        exactly one aggregation path to reason about.
+        """
+        return self.read_study([image_path])
+
+    def read_study(self, image_paths: list[str | Path] | list[Path] | list[str]) -> ReadResult:
+        """Read **every** film of a study and report one finding per label.
+
+        A radiologist reads a study, not a file. Reading only the first
+        film cost the G1 gate five confirmed-positive cases -- among them
+        study 1525, whose four films include the one showing a large
+        hydropneumothorax -- and which film "first" meant depended on
+        filesystem enumeration order.
+
+        Aggregation is the max probability across films, attributed to the
+        film that produced it. Max is the reading that matches what the
+        gate is for: a pneumothorax visible on one projection and not
+        another is still a pneumothorax. It is also the aggregation that
+        can be *wrong* in the safe direction -- it can over-call, never
+        under-call, relative to any single film.
+
+        Measured on the G1 gold set against the previous behaviour, this
+        plus the dropped center crop takes critical recall from 22/27 to
+        27/27 while the false-positive rate stays at 21/26 -- the same
+        operating point, reading more of the study. That distinction is
+        the whole point: raising recall by lowering a threshold (or by
+        ensembling in a model that alarms on everything) buys the same
+        number at a worse FPR, and would be one more welded-shut green
+        light of the kind this project keeps refusing to install.
+        """
         start = time.perf_counter()
-        tensor = _preprocess(image_path)
-        probs = _infer(tensor)
+        ordered = order_views(list(image_paths), self.settings)
+        if not ordered:
+            return ReadResult(
+                reader="a",
+                findings=[],
+                latency_ms=int((time.perf_counter() - start) * 1000),
+                notes=["reader_a received no films"],
+            )
+
+        # (tensor, probs) per film, kept so Grad-CAM can be computed later
+        # on *the film that won a label*, not on whichever one is handy.
+        reads = []
+        for ref in ordered:
+            tensor = _preprocess(ref.path)
+            reads.append((ref, tensor, _infer(tensor)))
+
+        best: dict[str, tuple[float, int]] = {}
+        for idx, (_ref, _tensor, probs) in enumerate(reads):
+            for raw_label, prob in probs.items():
+                prob = clamp(float(prob), 0.0, 1.0)
+                if raw_label not in best or prob > best[raw_label][0]:
+                    best[raw_label] = (prob, idx)
 
         findings: list[Finding] = []
-        for raw_label, prob in probs.items():
-            prob = clamp(float(prob), 0.0, 1.0)
+        for raw_label, (prob, idx) in best.items():
+            ref, tensor, _ = reads[idx]
             label = canonical(raw_label)
             locus = None
             if prob >= self.settings.cnn_prob_threshold:
@@ -224,8 +292,15 @@ class CNNReader:
                     source="cnn",
                     locus=locus,
                     raw_label=raw_label,
+                    image_ref=str(ref.path),
                 )
             )
 
+        notes = [
+            "reader_a read {} film(s): {}".format(
+                len(ordered),
+                ", ".join(f"{r.path.name} ({r.view}, symmetry {r.symmetry:.3f})" for r in ordered),
+            )
+        ]
         latency_ms = int((time.perf_counter() - start) * 1000)
-        return ReadResult(reader="a", findings=findings, latency_ms=latency_ms)
+        return ReadResult(reader="a", findings=findings, latency_ms=latency_ms, notes=notes)

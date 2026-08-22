@@ -61,6 +61,7 @@ from medscope.ontology import canonical  # noqa: E402
 from medscope.readers.cnn import CNNReader  # noqa: E402
 from medscope.readers.vlm import OfflineVLMClient, build_vlm_client, read_b  # noqa: E402
 from medscope.state import StudyState  # noqa: E402
+from medscope.views import primary_view  # noqa: E402
 
 OUT_PATH = Path("/tmp/medscope_vlm_calibration.json")
 
@@ -103,10 +104,16 @@ def main() -> None:
 
     per_study: list[dict] = []
     for study in studies:
-        image_path = study.image_paths[0]
+        # reader_a reads every film of the study; reader_b sees the primary
+        # one. The kappa below is therefore between a study-level reader
+        # and a single-film reader -- an asymmetry worth naming, since it
+        # is one of the ways the two can disagree without either being
+        # wrong about the film it actually saw.
+        image_path = primary_view(study.image_paths)
         state = StudyState(
             study_id=study.study_id,
             image_path=str(image_path),
+            image_paths=[str(p) for p in study.image_paths],
             indication=study.indication,
             # OpenI's XML has no field distinct from INDICATION/FINDINGS/
             # IMPRESSION that represents "clinical history" -- leaving this
@@ -115,7 +122,7 @@ def main() -> None:
             history_text="",
         )
 
-        read_a_result = reader_a.read(image_path)
+        read_a_result = reader_a.read_study(study.image_paths)
 
         if is_offline:
             # Bound directly to this study's ground-truth text -- see the
