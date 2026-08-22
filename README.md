@@ -129,7 +129,7 @@ python3.12 -m venv .venv                  # torch 在 3.14 上无可靠 wheel
 .venv/bin/pip install -e ".[cv,llm]"
 
 # 2. 跑测试（离线、hermetic、零 key）
-PYTHONPATH=src .venv/bin/pytest -q        # 386 passed, 2 deselected in ~81s
+PYTHONPATH=src .venv/bin/pytest -q        # 386 passed, 3 deselected in ~80s
 PYTHONPATH=src .venv/bin/pytest -m slow   # 2 个真权重用例 + 1 个真 DICOM 用例（无片则跳过）
 
 # 3. 跑评测门禁
@@ -210,7 +210,7 @@ make eval        # 或 EVAL_ARGS="--suite critical" make eval
 | `robustness` **G5 鲁棒性** | **硬门** | 注入拦截率 = 1.0，不变性 = 1.0 | ✅ PASS (n=9) |
 | `golden` | soft | 端到端产出完整度 | ✅ PASS (n=3) |
 
-单测：**386 passed, 2 deselected**（`slow` 标记的真权重用例默认不跑）。
+单测：**386 passed, 3 deselected**（`slow` 标记的真权重用例默认不跑）。
 
 ### 一条原则
 
@@ -453,7 +453,7 @@ medscope/
 │   ├── calibrate_vlm.py      # reader_b 基线校准；离线模式拒绝出结论并 exit 2
 │   ├── counterfactual_probe.py    # P4 探路：反事实编辑 vs 对照编辑，无 key 拒跑
 │   └── gen_phi_fixture.py    # G4 夹具生成
-├── tests/                    # pytest（386 passed, 2 deselected）+ conftest（隔离真 .env）
+├── tests/                    # pytest（386 passed, 3 deselected）+ conftest（隔离真 .env）
 ├── .github/workflows/ci.yml
 ├── Dockerfile                # 权重预取放在 USER app 之后，否则缓存落 root 家目录不可见
 └── docker-compose.yml
