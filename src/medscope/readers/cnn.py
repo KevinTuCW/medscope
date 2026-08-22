@@ -111,10 +111,13 @@ def _preprocess(image_path: str | Path, *, center_crop: bool = False) -> "torch.
     default.
     """
     import torchxrayvision as xrv
-    from PIL import Image
 
-    image = Image.open(image_path).convert("L")
-    arr = np.asarray(image, dtype=np.float32)
+    from contextlib import closing
+
+    from medscope.film import open_film
+
+    with closing(open_film(image_path)) as film:
+        arr = np.asarray(film.convert("L"), dtype=np.float32)
     arr = xrv.datasets.normalize(arr, 255)
     arr = arr[None, ...]  # (1, H, W) -- add channel dim
     if center_crop:

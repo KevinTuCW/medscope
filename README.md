@@ -12,7 +12,7 @@
 [![Qwen3-VL](https://img.shields.io/badge/reader__b-Qwen3--VL--32B-6B46C1.svg)](https://github.com/QwenLM/Qwen3-VL)
 [![Langfuse](https://img.shields.io/badge/Langfuse-tracing-fbbf24.svg)](https://langfuse.com/)
 [![CI](https://img.shields.io/badge/CI-tests%20%2B%20eval%20gate-2088FF.svg?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
-[![tests](https://img.shields.io/badge/tests-370%20passed-brightgreen.svg)](#-评测)
+[![tests](https://img.shields.io/badge/tests-386%20passed-brightgreen.svg)](#-评测)
 [![PHI leaks](https://img.shields.io/badge/PHI%20leaks-0-brightgreen.svg)](#-评测)
 [![gate](https://img.shields.io/badge/eval%20gate-PASS%20%C2%B7%20AUC%200.659-yellow.svg)](#-评测)
 
@@ -129,7 +129,7 @@ python3.12 -m venv .venv                  # torch 在 3.14 上无可靠 wheel
 .venv/bin/pip install -e ".[cv,llm]"
 
 # 2. 跑测试（离线、hermetic、零 key）
-PYTHONPATH=src .venv/bin/pytest -q        # 370 passed, 2 deselected in ~76s
+PYTHONPATH=src .venv/bin/pytest -q        # 386 passed, 2 deselected in ~81s
 PYTHONPATH=src .venv/bin/pytest -m slow   # 2 个真权重用例，约 10 分钟
 
 # 3. 跑评测门禁
@@ -160,7 +160,8 @@ curl -s -H "Authorization: Bearer $VLM_API_KEY" \
 PYTHONPATH=src .venv/bin/python scripts/fetch_openi.py --image-bytes 20000000
 ```
 
-图像包 1.36 GB、实测带宽约 379 KB/s，需一小时以上；`--image-bytes` 用 HTTP Range 只取前缀，20 MB 即可解出约 108 张完整 PNG。
+图像包 1.36 GB，`--image-bytes` 用 HTTP Range 只取前缀，20 MB 即可解出约 108 张完整 PNG。
+真实 DICOM 走 `--dicom-bytes N`（80.7 GB 归档取前缀，只保留像素完整的片子）。**默认绕开环境代理**：本机实测直连约 34 KB/s、走 SOCKS 代理只有 1 KB/s，要用代理得显式 `--use-proxy`。
 
 ## 💬 使用示例
 
@@ -209,7 +210,7 @@ make eval        # 或 EVAL_ARGS="--suite critical" make eval
 | `robustness` **G5 鲁棒性** | **硬门** | 注入拦截率 = 1.0，不变性 = 1.0 | ✅ PASS (n=9) |
 | `golden` | soft | 端到端产出完整度 | ✅ PASS (n=3) |
 
-单测：**370 passed, 2 deselected**（`slow` 标记的真权重用例默认不跑）。
+单测：**386 passed, 2 deselected**（`slow` 标记的真权重用例默认不跑）。
 
 ### 一条原则
 
@@ -283,6 +284,17 @@ make eval        # 或 EVAL_ARGS="--suite critical" make eval
 
 这一条不是「数据还没取到」，而是**数据不存在**。全库 3955 份报告里唯一一例非否定式的纵隔气肿是 study 895，而**它的图像不在 Open-i 归档中**（7470 张图，3955 份报告里有 104 份无图可配，895 是其中之一）。叠加模型侧没有这个输出——**G1 对这个标签的绿灯，在现有数据与模型下不可能变成真实的端到端证据**。
 
+### 真实 DICOM 暴露出的四件事
+
+打开一份真的 Open-i CR 文件，立刻翻出四样合成 `pydicom.Dataset` 永远测不到的东西——**这就是「白名单只由内存里造的 Dataset 覆盖过」为什么不算数**：
+
+- **`PhotometricInterpretation = MONOCHROME1`**：片子是**反相存储**的。把这样的像素直接喂给按 MONOCHROME2 训练的模型，不是轻微退化，是给它看底片。PNG 那条路径从来不需要知道这件事。
+- **`BitsStored = 15` / `BitsAllocated = 16`**：容器的位宽不等于有效范围，也不是想当然的 12 位。窗宽窗位得从数据里算，不能靠假设。
+- **file meta 组（0002）不属于 dataset**。pydicom 把它挂在 `ds.file_meta` 上，所以 `deid_dicom` 的 `for elem in dataset` **根本遍历不到**——而真实文件在那一组里带着 `SourceApplicationEntityTitle = 'REALVIEWSERVER'`、`PrivateInformationCreatorUID` 和 `MediaStorageSOPInstanceUID`：机构与设备身份，坐在白名单的视野之外。现在它们被显式点名报告（`dropped_file_meta`），而不是无声搭车。
+- **「已去标识」不等于「没有标识符」**：同一份文件里有 `PatientBirthDate = 19880317`、`AccessionNumber`、`StudyDate`。白名单把三个都丢掉了——这正是重点：在这批数据上 G4 的 DICOM 半边是**真在干活**，不是重言式。
+
+仍然没解决的：**烧录在像素里的标注（burned-in annotation）**。PHI 如果被渲染进像素本身，本仓库所有标签级规则对它一律无效，查它需要这里没有的 OCR。
+
 ### 双读的真实质量：形态修好了，结论还没有
 
 配上真实 VLM（`Qwen/Qwen3-VL-32B-Instruct`）跑校准，第一轮暴露的是**合并层的结构缺陷而非模型质量**：三份研究 71 条分歧**全部是 `unique`**，`presence`/`magnitude` 为 0——两个读者从头到尾没发生过一次正面比对。根因是 `reader_a` 对全部 18 个标签都产出 Finding（含自信为阴性的），而 `reader_b` 只报它看见的，于是每个未提及的阴性标签都被记成分歧。修复后：
@@ -309,7 +321,7 @@ eval 里评的草稿**已经过运行时证据门处理**（`graph._apply_eviden
 
 ### 其他
 
-- **未接真实 DICOM**：Open-i 的 DICOM 分发不可达，仓库只有 PNG。DICOM 标签白名单逻辑由**内存中合成的 `pydicom.Dataset`** 覆盖，未在真实 DICOM 文件上验证过。
+- **真实 DICOM：读得进来了，但仍未在完整数据集上跑过**。此前这里写的是「Open-i 的 DICOM 分发不可达」——**这条已被证伪**：`NLMCXR_dcm.tgz`（80.7 GB）会正常返回 `206 Partial Content`，`scripts/fetch_openi.py --dicom-bytes N` 现在能按前缀取。三个仍然成立的约束：归档**间歇性返回维护错误页**（所以有 `_require_gzip`）；本机直连约 34 KB/s，而走环境里的 SOCKS 代理只有 1 KB/s（所以默认 `trust_env=False`，要代理得显式 `--use-proxy`）；单张 CR 未压缩 13 MB 且压缩率很差，取前缀是**几张片**而不是一个数据集。像素不完整的片子一律丢弃而不是留着——tar 会按头部声明的大小把文件建出来，一个 93% 是零的片子照样能解析、照样报出合理的 `Rows`/`Columns`，「能打开」不构成证据。
 - 正位/侧位判据是镜像对称性启发式（`data/samples/qc/` 的样图上正位 0.833–0.851、侧位 0.151/−0.049，阈值 0.5），**不是经过验证的视图分类器**，故仅作软告警。**它在真实片子上比这个区间糊得多**：G1 金标准里几份研究的得分落在 0.403–0.787，直接骑在阈值上（study 1704 两张片 0.467 / 0.494，双双被判侧位，而它是一例确诊大量积液）。这就是 `views.py` 只用它排序、绝不用它丢片的原因。
 - 环境中 torch 2.2.2 与 numpy 2.x 存在 ABI 冲突，`readers/cnn.py` 以 `torch.frombuffer` 绕开（容器内已钉死兼容版本组合）。
 - 指南语料是**自行合成的教学材料**，非真实指南摘录，不含任何虚构出处。
@@ -370,11 +382,13 @@ medscope/
 │   ├── state.py              # StudyState / Finding / Description / Disagreement / CriticalAlert
 │   ├── ontology.py           # 标签本体；CRITICAL_LABELS 是 G1 的单一真源
 │   ├── data/
+│   │   ├── dicom.py          # 真实 DICOM 读取：MONOCHROME1 反相 / rescale / file meta 组
 │   │   ├── openi.py          # 数据集加载与图文配对
 │   │   └── synth_phi.py      # 合成 PHI 注入器（G4 前提，必须先于 deid.py 写）
 │   ├── deid.py               # DICOM 白名单 + 文本 PHI 规则 + scan_payload（G4 评分函数）
 │   ├── qc.py                 # 图像质控 + 正位/侧位镜像对称性筛查（软告警）
 │   ├── views.py              # 确定性视图排序：只排序不丢片（读片顺序不许由 OS 决定）
+│   ├── film.py               # 打开一张片：PNG 直读，DICOM 走脱敏读取路径
 │   ├── readers/
 │   │   ├── cnn.py            # reader_a：读全 study 视图 + 18 类概率 + 纯 torch Grad-CAM
 │   │   └── vlm.py            # reader_b + 独立性守护 + describer 降级 + 否定式过滤
@@ -395,11 +409,11 @@ medscope/
 │   └── store.py              # 审计持久化（内存 / SQLite；不存 indication/history 原文）
 ├── web/static/workbench.html # 零构建工作台：悬停报告句 → 图上区域与证据卡同时高亮
 ├── scripts/
-│   ├── fetch_openi.py        # 数据集拉取（HTTP Range 前缀下载，1.36 GB 可只取头部）
+│   ├── fetch_openi.py        # 数据集拉取（Range 前缀；--dicom-bytes 取真实 DICOM，默认绕开代理）
 │   ├── build_critical_goldset.py  # G1 金标准候选生成 —— 候选须人工核对后才入库
 │   ├── calibrate_vlm.py      # reader_b 基线校准；离线模式拒绝出结论并 exit 2
 │   └── gen_phi_fixture.py    # G4 夹具生成
-├── tests/                    # pytest（370 passed, 2 deselected）+ conftest（隔离真 .env）
+├── tests/                    # pytest（386 passed, 2 deselected）+ conftest（隔离真 .env）
 ├── .github/workflows/ci.yml
 ├── Dockerfile                # 权重预取放在 USER app 之后，否则缓存落 root 家目录不可见
 └── docker-compose.yml
@@ -436,7 +450,9 @@ medscope/
 - [ ] **reader_b 规模化校准** —— 跑满几十份研究，让 `reader_b_mode` 的决策有统计意义
 - [ ] **P4 生成轨** —— SD 合成稀有阳性 + **反事实对照图**（生成「移除病灶后的同一张片」，可解释性强于 CAM）
 - [ ] **P4 时序轨** —— SD 渐进 inpainting 造病灶演进序列（Open-i 无纵向随访配对，合成的好处是变化幅度已知、时序对比能真做 eval）
-- [ ] 真实 DICOM 端到端 —— 现有白名单逻辑仅由合成 `Dataset` 覆盖
+- [x] **真实 DICOM 读取路径** —— `data/dicom.py` + `film.py`：MONOCHROME1 反相、rescale、file meta 组识别符点名报告；`--dicom-bytes` 可从 80.7 GB 归档按前缀取片
+- [ ] **真实 DICOM 跑满一批** —— 现在验证过的是「一份真实 CR 文件的形态」，不是「一批真实 DICOM 端到端」；34 KB/s 的带宽下这需要挂着慢慢拉
+- [ ] **烧录像素标注检测** —— 标签级脱敏对渲染进像素的 PHI 完全无效，需要 OCR
 
 ## 📄 许可证
 

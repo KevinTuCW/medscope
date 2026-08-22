@@ -58,12 +58,14 @@ this study" semantics `_RESULTS` used to give for free.
 from __future__ import annotations
 
 import base64
+import io
 import json
 import mimetypes
 from pathlib import Path
 
 from medscope.bootstrap import build_sample_deps
 from medscope.config import Settings
+from medscope.data.dicom import is_dicom_path, read_film
 from medscope.data.openi import Study, load_studies
 from medscope.graph import GraphDeps, build_graph
 from medscope.ontology import canonical
@@ -171,6 +173,18 @@ def _image_data_url(image_path: str) -> str | None:
     path = Path(image_path)
     if not image_path or not path.is_file():
         return None
+
+    # A DICOM film cannot be handed to an <img> tag: no browser decodes
+    # it, and its raw bytes still carry the identifying tags. Render it
+    # through the same de-identifying reader the pipeline used (so the
+    # radiologist sees the pixels reader_a actually saw, MONOCHROME1
+    # inversion included) and ship a PNG.
+    if is_dicom_path(path):
+        buffer = io.BytesIO()
+        read_film(path).image.save(buffer, format="PNG")
+        encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
+
     mime, _ = mimetypes.guess_type(str(path))
     encoded = base64.b64encode(path.read_bytes()).decode("ascii")
     return f"data:{mime or 'application/octet-stream'};base64,{encoded}"

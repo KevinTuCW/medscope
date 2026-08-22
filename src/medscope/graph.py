@@ -272,9 +272,9 @@ def build_graph(deps: GraphDeps):
 
     # -- qc -------------------------------------------------------------------
     def _qc(state: GraphState) -> dict:
-        from PIL import Image
+        from medscope.film import open_film
 
-        image = Image.open(state["image_path"])
+        image = open_film(state["image_path"])
         result = check_quality(image, deps.settings)
         update = {"qc": result.model_dump(), "trace_events": [_trace_event("qc")], "qc_ok": result.ok}
         if not result.ok:

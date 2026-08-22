@@ -69,11 +69,15 @@ def score_view(image_path: str | Path) -> float:
     disagreed about what counts as a lateral, the workbench would show a
     view call that contradicts the film it drew the Grad-CAM on.
     """
-    from PIL import Image
+    from contextlib import closing
 
+    from medscope.film import open_film
     from medscope.qc import _lateral_symmetry_score
 
-    with Image.open(image_path) as image:
+    # Closed explicitly: `order_views` runs over every film of every study
+    # in an eval sweep, and leaving each one to the garbage collector is
+    # how a long run meets the open-file limit.
+    with closing(open_film(image_path)) as image:
         return _lateral_symmetry_score(image)
 
 
