@@ -221,3 +221,49 @@ def test_dicom_film_runs_through_qc_and_view_scoring(cr_file):
     assert "resolution_too_low" not in result.issues
     assert "no_signal" not in result.issues
     assert ordered[0].path == cr_file
+
+
+# ---------------------------------------------------------------------------
+# Against genuinely-downloaded Open-i films, when they are present
+# ---------------------------------------------------------------------------
+
+REAL_DICOM_DIR = Path("data/openi/dicom")
+
+
+@pytest.mark.slow
+def test_real_openi_films_read_end_to_end():
+    """Everything above writes its own DICOM; this one reads NLM's.
+
+    Skipped unless `scripts/fetch_openi.py --dicom-bytes N` has actually
+    landed films (the directory is gitignored, and one film is ~13 MB), so
+    the fast suite stays hermetic. Marked `slow` for the same reason the
+    real-weights tests are: it needs bytes this repo does not ship.
+
+    Measured on the 5 films a 45 MB prefix yielded: 2828x2320, all
+    MONOCHROME1, 46-56 tags dropped against 18 kept, and the same 5 file
+    meta identifiers named every time.
+    """
+    from medscope.qc import check_quality
+    from medscope.views import order_views
+
+    films = sorted(REAL_DICOM_DIR.glob("*.dcm"))
+    if not films:
+        pytest.skip(
+            "no real DICOM films present -- run "
+            "`python scripts/fetch_openi.py --dicom-bytes 45000000` to fetch some"
+        )
+
+    for path in films:
+        film = read_film(path)
+
+        assert film.image.mode == "L"
+        assert min(film.image.size) > 1000  # real CR, not a thumbnail
+        assert any("MONOCHROME1" in note for note in film.notes)
+        assert "SourceApplicationEntityTitle" in film.dropped_file_meta
+        # An allowlist that keeps more than it drops on a real film would
+        # mean the file arrived pre-scrubbed and this proves nothing.
+        assert len(film.deid_report["dropped_tags"]) > len(film.deid_report["kept_tags"])
+        assert "PatientName" not in film.deid_report["kept_tags"]
+
+        assert check_quality(film.image).ok
+        assert order_views([path])[0].path == path

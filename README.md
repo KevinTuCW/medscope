@@ -130,7 +130,7 @@ python3.12 -m venv .venv                  # torch 在 3.14 上无可靠 wheel
 
 # 2. 跑测试（离线、hermetic、零 key）
 PYTHONPATH=src .venv/bin/pytest -q        # 386 passed, 2 deselected in ~81s
-PYTHONPATH=src .venv/bin/pytest -m slow   # 2 个真权重用例，约 10 分钟
+PYTHONPATH=src .venv/bin/pytest -m slow   # 2 个真权重用例 + 1 个真 DICOM 用例（无片则跳过）
 
 # 3. 跑评测门禁
 make eval                                 # 当前 GATE: PASS（G1 27/27；先读「诚实的局限」再信这盏灯）
@@ -285,6 +285,8 @@ make eval        # 或 EVAL_ARGS="--suite critical" make eval
 这一条不是「数据还没取到」，而是**数据不存在**。全库 3955 份报告里唯一一例非否定式的纵隔气肿是 study 895，而**它的图像不在 Open-i 归档中**（7470 张图，3955 份报告里有 104 份无图可配，895 是其中之一）。叠加模型侧没有这个输出——**G1 对这个标签的绿灯，在现有数据与模型下不可能变成真实的端到端证据**。
 
 ### 真实 DICOM 暴露出的四件事
+
+已在 **5 张真实 Open-i CR 片**上端到端跑通（2828×2320，`--dicom-bytes 45000000` 取到的；`pytest -m slow` 里有对应用例，片子不在仓内时自动跳过）：全部 MONOCHROME1，每张丢弃 46–56 个标签、保留 18 个，file meta 组 5 个识别符每次都被点名，QC 通过，视图判据给出正位 0.923 / 0.789、侧位 −0.156。
 
 打开一份真的 Open-i CR 文件，立刻翻出四样合成 `pydicom.Dataset` 永远测不到的东西——**这就是「白名单只由内存里造的 Dataset 覆盖过」为什么不算数**：
 
@@ -472,7 +474,7 @@ medscope/
 - [ ] **P4 合成稀有阳性** —— 纵隔气肿这类全库无可用图像的标签，只有合成能覆盖；但合成数据的保真度必须先过上面那道对照
 - [ ] **P4 时序轨** —— SD 渐进 inpainting 造病灶演进序列（Open-i 无纵向随访配对，合成的好处是变化幅度已知、时序对比能真做 eval）
 - [x] **真实 DICOM 读取路径** —— `data/dicom.py` + `film.py`：MONOCHROME1 反相、rescale、file meta 组识别符点名报告；`--dicom-bytes` 可从 80.7 GB 归档按前缀取片
-- [ ] **真实 DICOM 跑满一批** —— 现在验证过的是「一份真实 CR 文件的形态」，不是「一批真实 DICOM 端到端」；34 KB/s 的带宽下这需要挂着慢慢拉
+- [ ] **真实 DICOM 跑满一批** —— 现在是 5 张真片端到端；要跑成一个有统计意义的批次，34 KB/s 的带宽下得挂着慢慢拉（80.7 GB 归档，单张 ~13 MB）
 - [ ] **烧录像素标注检测** —— 标签级脱敏对渲染进像素的 PHI 完全无效，需要 OCR
 
 ## 📄 许可证
