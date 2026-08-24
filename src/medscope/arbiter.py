@@ -54,6 +54,7 @@ from pydantic import BaseModel, Field
 
 from medscope.config import Settings
 from medscope.llm import ModelClient, ModelResponse
+from medscope.obs import observe_model_call, observe_retrieval
 from medscope.rag.store import Doc, Retriever
 from medscope.security.sanitize import neutralize_untrusted
 from medscope.state import Disagreement, Finding
@@ -217,7 +218,17 @@ _OUTPUT_INSTRUCTIONS = (
 
 def _retrieve_passages(disagreement: Disagreement, deps: ArbiterDeps) -> list[Doc]:
     query = f"{disagreement.label} {disagreement.kind}"
-    return deps.retriever.search(query, k=deps.top_k)
+    with observe_retrieval(
+        "retrieve-guidelines", query, metadata={"label": disagreement.label, "k": deps.top_k}
+    ) as span:
+        passages = deps.retriever.search(query, k=deps.top_k)
+        if span is not None:
+            # The passages themselves, not just how many: an arbiter that
+            # confirms a finding on the strength of an irrelevant guideline
+            # looks identical to a correct one until you read what it was
+            # given.
+            span.update(output=[{"id": p.id, "text": p.text} for p in passages])
+        return passages
 
 
 def _build_arbiter_prompt(disagreement: Disagreement, passages: list[Doc]) -> str:
@@ -375,7 +386,22 @@ def arbitrate(
 
         passages = _retrieve_passages(disagreement, deps)
         prompt = _build_arbiter_prompt(disagreement, passages)
-        response = deps.client.chat_with_image(prompt, image_path, system=ARBITER_SYSTEM_PROMPT)
+        response = observe_model_call(
+            "arbitrate-disagreement",
+            deps.client,
+            prompt,
+            image_path,
+            system=ARBITER_SYSTEM_PROMPT,
+            metadata={
+                "label": disagreement.label,
+                "kind": disagreement.kind,
+                "a_prob": disagreement.a_prob,
+                "b_prob": disagreement.b_prob,
+                "in_vocabulary": disagreement.in_vocabulary,
+                "budget_position": i + 1,
+                "budget": budget,
+            },
+        )
         calls_made += 1
 
         verdict, reasoning = _parse_verdict(response.text)

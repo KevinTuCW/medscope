@@ -30,6 +30,7 @@ from pathlib import Path
 
 from medscope.config import Settings
 from medscope.llm import ModelClient, ModelResponse, OpenAICompatibleModelClient
+from medscope.obs import observe_model_call
 from medscope.ontology import canonical
 from medscope.security.sanitize import neutralize_untrusted
 from medscope.state import Description, Finding, ReadResult, StudyState
@@ -519,7 +520,18 @@ def read_b(state: StudyState, client: VLMClient, settings: Settings) -> ReadResu
     """
     start = time.perf_counter()
     prompt = build_reader_b_prompt(state, settings)
-    response = client.chat_with_image(prompt, state.image_path, system=READER_B_SYSTEM_PROMPT)
+    response = observe_model_call(
+        "read-film-vlm",
+        client,
+        prompt,
+        state.image_path,
+        system=READER_B_SYSTEM_PROMPT,
+        metadata={
+            "reader": "b",
+            "reader_b_mode": settings.reader_b_mode,
+            "study_id": state.study_id,
+        },
+    )
     latency_ms = int((time.perf_counter() - start) * 1000)
 
     payload = _extract_json_payload(response.text)

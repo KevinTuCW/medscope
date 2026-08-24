@@ -35,10 +35,21 @@ from pydantic import BaseModel
 class ModelResponse(BaseModel):
     """A model's raw reply. `tokens` is 0 for offline/test doubles and for
     any real response whose `usage` block is missing -- callers must not
-    treat 0 as "definitely free", just "unknown/not billed here"."""
+    treat 0 as "definitely free", just "unknown/not billed here".
+
+    `input_tokens`/`output_tokens` carry the same number split the way
+    vendors price it. They exist because a total alone cannot be costed:
+    input and output tokens have different unit prices, so `medscope.obs`
+    needs the split to hand Langfuse something it can turn into money. Both
+    follow the same 0-means-unknown rule as `tokens`, and the split is not
+    guaranteed to be present when the total is -- a vendor that reports only
+    `total_tokens` leaves these two at 0.
+    """
 
     text: str
     tokens: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 @runtime_checkable
@@ -116,6 +127,21 @@ def _extract_tokens(usage) -> int:
     return int(prompt) + int(completion)
 
 
+def _extract_token_split(usage) -> tuple[int, int]:
+    """The prompt/completion split, `(0, 0)` when the vendor omits it.
+
+    Kept separate from `_extract_tokens` rather than folded into it: that
+    function's contract is a single number every caller already depends on,
+    and the split is genuinely allowed to be absent on a response whose
+    total is present.
+    """
+    if usage is None:
+        return 0, 0
+    prompt = getattr(usage, "prompt_tokens", 0) or 0
+    completion = getattr(usage, "completion_tokens", 0) or 0
+    return int(prompt), int(completion)
+
+
 class OpenAICompatibleModelClient:
     """Real client over any OpenAI-compatible endpoint (SiliconFlow-hosted
     Qwen-VL, per `Settings.vlm_base_url`/`vlm_model`/`vlm_api_key`).
@@ -155,6 +181,10 @@ class OpenAICompatibleModelClient:
         import httpx
 
         self.name = name
+        # Public as well as private: `medscope.obs` records which model
+        # produced a reading, and a `generation` whose model name doesn't
+        # match the pricing table is one Langfuse cannot cost.
+        self.model = model
         self._model = model
         http_client = httpx.Client(trust_env=False, timeout=timeout)
         self._client = OpenAI(
@@ -171,5 +201,9 @@ class OpenAICompatibleModelClient:
         messages = _build_messages(prompt, image_path, system)
         resp = self._client.chat.completions.create(model=self._model, messages=messages)
         text = resp.choices[0].message.content or ""
-        tokens = _extract_tokens(getattr(resp, "usage", None))
-        return ModelResponse(text=text, tokens=tokens)
+        usage = getattr(resp, "usage", None)
+        tokens = _extract_tokens(usage)
+        input_tokens, output_tokens = _extract_token_split(usage)
+        return ModelResponse(
+            text=text, tokens=tokens, input_tokens=input_tokens, output_tokens=output_tokens
+        )

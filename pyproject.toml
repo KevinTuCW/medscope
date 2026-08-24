@@ -16,7 +16,11 @@ dependencies = [
 
 [project.optional-dependencies]
 cv = ["torch", "torchxrayvision", "pydicom"]
-llm = ["langgraph", "openai", "langfuse"]
+# `langchain` is here for Langfuse's LangGraph callback handler, which
+# needs the full package rather than the `langchain-core` langgraph pulls
+# in. Without it tracing still works, minus the per-node spans -- see
+# `medscope.obs._langgraph_callbacks`.
+llm = ["langgraph", "openai", "langfuse", "langchain"]
 gen = ["diffusers"]
 
 [build-system]

@@ -69,6 +69,7 @@ from medscope.data.dicom import is_dicom_path, read_film
 from medscope.data.openi import Study, load_studies
 from medscope.graph import GraphDeps, build_graph
 from medscope.ontology import canonical
+from medscope.obs import study_trace
 from medscope.runner import run_study
 from medscope.state import StudyState
 from medscope.store import RunStore, build_run_store
@@ -397,19 +398,33 @@ def sse_events(state: StudyState, deps: GraphDeps):
     chunks carry the full accumulated state after each superstep, so the
     last one observed is the final state -- without hand-reimplementing
     LangGraph's own reducer logic for `notes`/`trace_events`.
+
+    Because it bypasses `runner.run_study`, it also has to open the study
+    trace itself. Leaving that out would make the streamed path the one
+    entry point that silently produces no trace -- and it is the path a
+    person actually watches, so it is the last one that should be dark.
     """
     yield _sse("start", {"study_id": state.study_id})
 
     graph = build_graph(deps)
     last_values: dict | None = None
-    for mode, chunk in graph.stream(state.model_dump(), stream_mode=["updates", "values"]):
-        if mode == "updates":
-            for node_name in chunk:
-                yield _sse("node", {"node": node_name})
-        else:
-            last_values = chunk
+    with study_trace(state, deps.settings) as trace:
+        for mode, chunk in graph.stream(
+            state.model_dump(),
+            stream_mode=["updates", "values"],
+            config={"callbacks": trace.callbacks},
+        ):
+            if mode == "updates":
+                for node_name in chunk:
+                    yield _sse("node", {"node": node_name})
+            else:
+                last_values = chunk
 
-    final_state = StudyState.model_validate(last_values if last_values is not None else state.model_dump())
+        final_state = StudyState.model_validate(
+            last_values if last_values is not None else state.model_dump()
+        )
+        trace.finish(final_state)
+
     _store().save(final_state)
 
     yield _sse("complete", build_dashboard(final_state))

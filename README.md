@@ -466,13 +466,26 @@ eval 里评的草稿**已经过运行时证据门处理**（`graph._apply_eviden
 
 ## 🔭 可观测
 
-一次阅片 = 一条 Langfuse trace，逐节点可下钻（qc / reader_a / reader_b / merge / arbiter / report / gates）。可选开启：
+一次阅片 = 一条 Langfuse trace，逐节点可下钻（intake / deid / qc / reader_a / reader_b / merge / arbiter / report_writer / evidence_check / language_guard / review_queue）。可选开启：
 
 ```bash
 LANGFUSE_PUBLIC_KEY=... LANGFUSE_SECRET_KEY=... LANGFUSE_HOST=https://us.cloud.langfuse.com
+pip install -e '.[llm]'
 ```
 
-未配 key 时 `Settings.tracing_enabled` 为 False，全链路静默跳过，不影响任何测试与门禁。
+未配 key 时不构造任何 client——不是构造一个 no-op，而是压根不构造。「静默跳过」必须做到连一次 callback 分发都不多，因为 graph 里唯一依赖时序的断言（危急值告警必须早于报告）正是被这种「看起来无害」的开销破坏的。
+
+**节点 span 来自 LangGraph callback，不是给节点加装饰器**——`graph.py` 至今不 import 任何 observability 符号，流水线不知道自己正被观察。三个 `_route_after_*` 路由函数的 span 在导出前被 `should_export_span` 丢掉：路由是分支不是步骤，它的 span 没有 input、没有 output、没有值得读的耗时。
+
+**片子不出境，且不是靠 masking 拦的。** Langfuse SDK 会把 base64 data URI 抽出来传到它的对象存储，而这一步发生在 masking hook **之前**——等 hook 拿到 span，片子已经传完了，masking 救不回来。所以三个模型调用（reader_b / arbiter / report_writer）共用的那个唯一出口 `obs.observe_model_call` 在**交给 SDK 之前**就把图像换成 `[MASKED image/png · sha256:… ]` 引用。代价是放弃 `langfuse.openai` 那个 drop-in wrapper——它做得没错，只是它的全部价值在于原样捕获请求，而请求里恰好是我们唯一不发的东西。
+
+**导出边界再过一遍 `deid.deid_text`。** 这是补一个顺序漏洞：`intake` 节点跑在 `deid` **之前**，它的 span 里装的是调用方递进来的原始转诊文本。masking hook 对每条字符串属性重跑一遍流水线自己的脱敏，逐属性 fail-closed——某条属性炸了就换成占位符，而不是抛出去：SDK 在 mask 函数抛异常时会丢掉**整个 batch**，一条畸形属性能顺手带走同批所有 span。需要说清楚的是它继承 `deid.py` 的覆盖面，一字不多：补的是顺序，不是又加了一层更强的检测器。
+
+**每次阅片落 7 个 score**（`terminal-status` / `kappa` / `kappa-all-labels` / `critical-alerts` / `arbiter-calls` / `findings-needing-human` / `disagreements`，有 token 时加 `tokens-used`），都是跑完才知道的数，所以用 score 而不是 tag（tag 在创建时就冻结）。`kappa` 为 None 时**不落 0**——没跑到 merge（QC 挂了、intake 拦了）和「两位读者完全不一致」在仪表盘上必须长得不一样。
+
+`session_id` 用 study_id：一份检查 NEEDS_REPEAT 之后会被重读，那几次 run 属于同一个 session。没有 `user_id`——本系统没有登录用户，硬造一个只会多一列常量。
+
+代理坑，和 `llm.py` 那条同源但更深一层：本机 `ALL_PROXY` 是 SOCKS5，而 `httpx` 需要没装的 `socksio` 才能走。`httpx_client=Client(trust_env=False)` 只盖住同步端，SDK 内部还会自己 new 一个 `httpx.AsyncClient()` 且不接受注入——构造时直接 `ImportError`，一条 span 都发不出去。解法是构造 client 的那一瞬间把代理变量摘掉（httpx 只在构造时解析一次），随即还原。
 
 **工作台本身就是可观测面**：五块面板把双读对照、分歧与仲裁裁决、证据溯源、危急值时间线、门禁状态摊开；悬停报告里任一句，图上对应区域与证据卡同时高亮。**只画属于当前这张片的 Grad-CAM**：`reader_a` 读全 study，locus 可能来自另一张投照，画上去就是一个自信的错误标注；不属于当前片的 locus 计数上报（`loci_on_other_views`）而不绘制，免得「框变少了」被读成「没找到东西」。**仲裁裁决如实存储在 `StudyState.arbitration_records`**，不从「finding 在不在最终集合 + needs_human」反推——反推与 `arbiter.py` 当下行为一致，但隐式耦合其内部，一旦 REJECT 语义变化就会**自信地报出错误裁决**。审计视图误报比不报更糟。
 
@@ -522,7 +535,7 @@ medscope/
 │   ├── security/             # sanitize(去指令化) · redact(PII/密钥脱敏)
 │   ├── rag/                  # embed(离线哈希) · store(内存余弦) · corpus
 │   ├── graph.py              # LangGraph 编排 + 危急值并行旁路 + evidence 重试回环
-│   ├── runner.py             # 执行入口     obs.py  Langfuse 桥（无 key 时静默跳过）
+│   ├── runner.py             # 执行入口     obs.py  Langfuse 桥（无 key 不构造 client；片子在交给 SDK 前换成引用）
 │   ├── workbench.py          # 五块面板组装 + SSE 逐节点流式
 │   ├── eval.py               # 六套件门禁 CLI（五硬一软，破线 exit 2）
 │   └── store.py              # 审计持久化（内存 / SQLite；不存 indication/history 原文）
@@ -556,7 +569,9 @@ medscope/
 | `KAPPA_FLOOR` / `DISAGREEMENT_CEILING` | `0.4` / `0.4` | `calibrate_vlm.py` 的降级判据 |
 | `MAX_LLM_JUDGMENTS` | `12` | 单次阅片的仲裁预算上限 |
 | `RUN_STORE` / `SQLITE_PATH` | `memory` | `memory`（进程内）\| `sqlite`（跨重启持久） |
-| `LANGFUSE_*` | 空 | 两个 key 都填才启用 tracing |
+| `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | 空 | 两个都填才启用 tracing；缺一个就不构造 client |
+| `LANGFUSE_HOST` | 空 | 区域端点，如 `https://us.cloud.langfuse.com` |
+| `LANGFUSE_ENVIRONMENT` | `development` | 与 `USE_REAL_VLM` 同一个默认姿态：没配置的那次运行，默认是有人在试 |
 
 > 危急值标签清单**不在这里**——单一真源是 `ontology.CRITICAL_LABELS`。放两处必然拼写漂移，而漂移的表现是 G1 静默失效。
 

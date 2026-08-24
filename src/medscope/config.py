@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
     langfuse_host: str = ""
+    # Keeps a laptop's traces out of whatever dashboards a deployed copy
+    # feeds. Defaults to "development" rather than "production" for the
+    # same reason `use_real_vlm` defaults to False: the safe assumption
+    # about an unconfigured run is that it is somebody experimenting.
+    langfuse_environment: str = "development"
 
     # medscope.store: which RunStore backend persists workbench runs.
     # "memory" (default) matches the old `workbench._RESULTS` behaviour --

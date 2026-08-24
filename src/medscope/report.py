@@ -54,6 +54,7 @@ from medscope.config import Settings
 from medscope.evidence import CLAIM_SECTIONS
 from medscope.language import REQUIRED_DISCLAIMER
 from medscope.llm import ModelClient, ModelResponse
+from medscope.obs import observe_model_call
 from medscope.security.sanitize import neutralize_untrusted
 from medscope.state import Finding, ReportDraft, ReportSentence, StudyState
 
@@ -458,7 +459,21 @@ def write_report(
     """
     known_ids = {f.evidence_id for f in findings}
     prompt = _build_report_prompt(findings, state)
-    response = client.chat_with_image(prompt, state.image_path, system=REPORT_SYSTEM_PROMPT)
+    response = observe_model_call(
+        "write-report",
+        client,
+        prompt,
+        state.image_path,
+        system=REPORT_SYSTEM_PROMPT,
+        metadata={
+            "study_id": state.study_id,
+            "findings": len(findings),
+            # The citable set the model was told to stay inside. When a
+            # draft comes back with a dangling citation, this is the first
+            # thing you want to see next to it.
+            "citable_evidence_ids": sorted(known_ids),
+        },
+    )
 
     obj = _extract_json_value(response.text)
     sections = _normalize_sections(obj)
