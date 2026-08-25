@@ -322,7 +322,7 @@
     renderCritical(dashboard.critical);
     renderImage(dashboard.image);
     renderDualRead(dashboard.dual_read);
-    renderReport(dashboard.report, dashboard.blocked, dashboard.audit.notes);
+    renderReport(dashboard.report, dashboard.blocked, dashboard.audit.notes, dashboard.status);
     renderAudit(dashboard.audit);
   }
 
@@ -398,7 +398,21 @@
     return td;
   }
 
-  function renderReport(report, blocked, notes) {
+  // Why a draft is withheld, per terminal status. The output guardrail only
+  // produces `reasons` when it *downgraded* a proposed DRAFT_READY (see
+  // guardrails/output.py) -- CRITICAL_ESCALATED and HELD are proposed by
+  // review_queue itself and come back with an empty list. So for the two
+  // most common withheld statuses the status IS the reason, and it has to
+  // be stated here or the panel explains nothing.
+  var WITHHELD_BECAUSE = {
+    CRITICAL_ESCALATED: "a critical finding was escalated — the alert is the deliverable here, not the draft",
+    HELD: "a finding needs human review",
+    NEEDS_REPEAT: "QC rejected the film, so the study was never read",
+    GUARDRAIL_BLOCKED: "the input guardrail blocked this study before it was read",
+    pending: "the run did not finish"
+  };
+
+  function renderReport(report, blocked, notes, status) {
     el.reportBody.classList.toggle("blocked", blocked);
 
     if (blocked) {
@@ -406,16 +420,21 @@
         return n.indexOf("output guardrail withheld the draft") !== -1;
       });
       el.reportBlockedReasons.innerHTML = "";
+
+      var why = WITHHELD_BECAUSE[status] || ("its status is " + status);
       var title = document.createElement("div");
-      title.textContent = "Draft withheld — this study's status is not DRAFT_READY, so no draft is shown as final:";
+      // Only promise a list when there is one. The old text ended in a
+      // colon unconditionally, which on any CRITICAL_ESCALATED or HELD run
+      // left a sentence dangling into nothing.
+      title.textContent =
+        "Draft withheld (" + status + ") — " + why + (reasons.length ? ":" : ".");
       el.reportBlockedReasons.appendChild(title);
-      if (reasons.length) {
-        reasons.forEach(function (r) {
-          var line = document.createElement("div");
-          line.textContent = "• " + r;
-          el.reportBlockedReasons.appendChild(line);
-        });
-      }
+
+      reasons.forEach(function (r) {
+        var line = document.createElement("div");
+        line.textContent = "• " + r;
+        el.reportBlockedReasons.appendChild(line);
+      });
       el.reportBlockedReasons.classList.add("show");
     } else {
       el.reportBlockedReasons.classList.remove("show");
