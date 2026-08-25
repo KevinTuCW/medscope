@@ -63,7 +63,7 @@ import json
 import mimetypes
 from pathlib import Path
 
-from medscope.bootstrap import build_sample_deps
+from medscope.bootstrap import build_runtime_deps, build_sample_deps
 from medscope.config import Settings
 from medscope.data.dicom import is_dicom_path, read_film
 from medscope.data.openi import Study, load_studies
@@ -93,20 +93,129 @@ def _store() -> RunStore:
 
 
 # ---------------------------------------------------------------------------
-# Sample-study wiring
+# Corpus wiring
 # ---------------------------------------------------------------------------
 
+#: The three studies committed to the repo. They are *not* a separate
+#: corpus: all three also exist in the fetched OpenI dataset, there with two
+#: views each instead of the one that fits in a git repo. So they are
+#: floated to the top of an unfiltered listing rather than concatenated onto
+#: it -- listing both copies would offer the same study twice, differing
+#: only in how much of it reader_a gets to read.
+PINNED_STUDY_IDS = ("38", "797", "1187")
 
-def list_sample_studies() -> list[Study]:
-    """Every committed sample study that actually has an image to read."""
-    return [s for s in load_studies(SAMPLES_DIR) if s.image_paths]
+#: Page size for the study listing. The fetched corpus is ~3.8k studies;
+#: shipping all of them to a `<select>` on every page load is a lot of
+#: payload for a list nobody reads past the top of.
+DEFAULT_STUDY_LIMIT = 50
+
+_corpus_cache: dict[str, list[Study]] = {}
 
 
-def find_sample_study(study_id: str) -> Study:
-    for study in list_sample_studies():
+def corpus_root(settings: Settings | None = None) -> Path:
+    """Where studies are read from.
+
+    The fetched OpenI dataset when it has been downloaded, the committed
+    sample slice otherwise. Probing for the `ecgen-radiology/` subdirectory
+    rather than calling `load_studies` keeps this cheap enough to call on
+    every request: a full load of the real corpus takes seconds, and the
+    answer to "which root" must not.
+
+    The fallback is what preserves the project's offline-first property --
+    a fresh clone with no `data/openi/` still gets a working workbench,
+    with the three committed studies in it.
+    """
+    settings = settings or Settings()
+    root = Path(settings.openi_root)
+    if (root / "ecgen-radiology").is_dir():
+        return root
+    return SAMPLES_DIR
+
+
+def load_corpus(settings: Settings | None = None) -> list[Study]:
+    """Every loadable study under `corpus_root`, cached per root.
+
+    Caching is not an optimization here so much as a precondition: loading
+    the full OpenI corpus walks ~7.5k image files and parses ~3.9k report
+    XMLs, which measured ~5.6s on the development machine. Paying that on
+    every keystroke of the search box would make the feature unusable.
+
+    Keyed by root so a differently-configured `Settings` (a test pointing
+    at a fixture directory) can never be served the corpus loaded for
+    another one.
+    """
+    root = corpus_root(settings)
+    key = str(root)
+    if key not in _corpus_cache:
+        _corpus_cache[key] = [s for s in load_studies(root) if s.image_paths]
+    return _corpus_cache[key]
+
+
+def reset_corpus_cache() -> None:
+    """Drop the cached corpora. For tests, and for a process that has just
+    had a dataset downloaded underneath it."""
+    _corpus_cache.clear()
+
+
+def _matches(study: Study, needle: str) -> bool:
+    """Match on study id, referral question, or MeSH terms.
+
+    MeSH earns its place: the indication is what the *referrer* wrote
+    ("chest pain"), while the MeSH terms are what the study turned out to
+    show ("Pneumothorax"). Someone hunting for a case to demonstrate a
+    critical finding is searching for the latter, and would find almost
+    nothing searching only indications.
+    """
+    if needle in study.study_id.lower():
+        return True
+    if needle in (study.indication or "").lower():
+        return True
+    return any(needle in term.lower() for term in study.mesh)
+
+
+def search_studies(
+    q: str = "", limit: int = DEFAULT_STUDY_LIMIT, settings: Settings | None = None
+) -> tuple[list[Study], int]:
+    """One page of matching studies, plus how many matched in total.
+
+    The total is returned separately rather than left for the caller to
+    infer from the page length: "50 studies" and "50 of 812 studies" are
+    different things to show someone, and a truncated page cannot tell
+    them apart on its own.
+    """
+    studies = load_corpus(settings)
+    needle = (q or "").strip().lower()
+
+    if needle:
+        matched = [s for s in studies if _matches(s, needle)]
+    else:
+        pinned = [s for s in studies if s.study_id in PINNED_STUDY_IDS]
+        rest = [s for s in studies if s.study_id not in PINNED_STUDY_IDS]
+        matched = pinned + rest
+
+    total = len(matched)
+    page = matched[:limit] if limit and limit > 0 else matched
+    return page, total
+
+
+def list_sample_studies(settings: Settings | None = None) -> list[Study]:
+    """Every loadable study in the active corpus.
+
+    Retained under its original name because it is what `eval` and the
+    tests reach for when they mean "the studies this machine can run".
+    """
+    return load_corpus(settings)
+
+
+def find_study(study_id: str, settings: Settings | None = None) -> Study:
+    for study in load_corpus(settings):
         if study.study_id == study_id:
             return study
-    raise KeyError(f"no sample study with id {study_id!r}")
+    raise KeyError(f"no study with id {study_id!r} under {corpus_root(settings)}")
+
+
+#: Kept as the old name so nothing that imported it breaks.
+find_sample_study = find_study
 
 
 def build_initial_state(study: Study) -> StudyState:
@@ -124,17 +233,36 @@ def build_initial_state(study: Study) -> StudyState:
     )
 
 
-def deps_for_study(study: Study) -> GraphDeps:
-    # OfflineVLMClient derives reader_b's findings from the study's own
-    # ground-truth impression text -- see bootstrap.build_sample_deps -- so
-    # a meaningful double-read needs deps built per study, not shared.
-    return build_sample_deps(impression_text=study.impression_text)
+def deps_for_study(study: Study, settings: Settings | None = None) -> GraphDeps:
+    """Live clients when `use_real_vlm` is set, offline stand-ins otherwise.
+
+    This used to be hardwired to `build_sample_deps`, which meant the
+    workbench read every study with `OfflineVLMClient` even on a machine
+    configured for a real VLM. That was defensible while the workbench
+    could only run three committed studies; it stops being defensible once
+    it can run the whole corpus, because the stand-in derives reader_b's
+    findings from *the study's own ground-truth report*. Point that at
+    3.8k studies and the dual-read panel shows agreement everywhere -- an
+    artifact of reader_b having read the answer key, displayed in the exact
+    panel built to show whether two readers independently agree.
+
+    `build_runtime_deps` raises rather than quietly degrading when
+    `use_real_vlm` is set without credentials; that refusal is the point,
+    so it is left to propagate (see `bootstrap`'s module docstring).
+
+    OfflineVLMClient is seeded per study, so the offline branch has to
+    build deps per study rather than sharing one set.
+    """
+    settings = settings or Settings()
+    if settings.use_real_vlm:
+        return build_runtime_deps(settings)
+    return build_sample_deps(settings, impression_text=study.impression_text)
 
 
 def run_sample_study(study_id: str) -> StudyState:
-    """Run one sample study end to end through the real pipeline (offline
-    stand-ins per `build_sample_deps`), persist it, and return the result."""
-    study = find_sample_study(study_id)
+    """Run one study from the active corpus end to end, persist it, and
+    return the result."""
+    study = find_study(study_id)
     state = build_initial_state(study)
     result = run_study(state, deps_for_study(study))
     _store().save(result)

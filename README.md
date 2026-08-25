@@ -143,6 +143,8 @@ make run                                  # → http://localhost:8000/workbench�
 仓内已含 3 例样本切片，**克隆即可离线跑通全流程**，无需 key、无需网络。
 Docker：`docker compose up`（CNN 权重在**构建时预取**，运行时零下载）。
 
+**工作台跑哪些片子由语料决定，不写死**：`data/openi/` 下有 `ecgen-radiology/` 就用完整语料（本机实测 3,851 份可载入），否则回落到仓内 3 例——这条回落正是「克隆即可跑」的保证。语料按根目录缓存（全量载入一次约 5.6 秒，之后检索是毫秒级），选片框支持按 study id / 转诊问题 / MeSH 检索。
+
 **接入真实 VLM**（可选，`reader_b` 从替身换成真模型）：
 
 ```bash
@@ -154,6 +156,8 @@ cp .env.example .env
 curl -s -H "Authorization: Bearer $VLM_API_KEY" \
   "$VLM_BASE_URL/models?type=text&sub_type=chat" | jq -r '.data[].id'
 ```
+
+`USE_REAL_VLM=true` 之后**工作台也跟着走真模型**。这一条曾经不成立：`deps_for_study` 写死了 `build_sample_deps`，配没配 key 工作台都用 `OfflineVLMClient`。只有 3 份片子时无伤大雅，放开整个语料就不行了——那个替身是**从这份 study 自己的 ground-truth 报告里推 findings** 的，拿它跑 3.8k 份，双读面板会满屏一致，而那块面板存在的全部意义就是显示两位读者是否独立地一致。配了 `USE_REAL_VLM` 却缺 key 时**报 503 而不是静默降级**，理由同 `build_runtime_deps`。
 
 **完整数据集**：
 
@@ -167,8 +171,13 @@ PYTHONPATH=src .venv/bin/python scripts/fetch_openi.py --image-bytes 20000000
 ## 💬 使用示例
 
 ```bash
-# 仓内样本研究（3 例，克隆即有）
-curl -s localhost:8000/studies | jq -r '.studies[].study_id'    # → 38 / 797 / 1187
+# 可跑的研究列表。未下载数据集时是仓内 3 例样本；跑过 fetch_openi.py
+# 之后自动切到完整语料（约 3.8k 份），默认回 50 条并把 3 份样本置顶
+curl -s localhost:8000/studies | jq '{total, corpus, ids: [.studies[].study_id]}'
+
+# 按 study id / 转诊问题 / MeSH 检索——找「能演示危急值的片子」得搜 MeSH：
+# indication 是转诊医生写的主诉，MeSH 才是这份研究最终读出了什么
+curl -s 'localhost:8000/studies?q=pneumothorax' | jq '{total, ids: [.studies[].study_id]}'
 
 # 单份研究穿过全流程，返回五块面板（双读 / 分歧仲裁 / 证据 / 危急值 / 门禁）
 # 面板自带 base64 原图供工作台渲染，命令行看时剔掉更清爽

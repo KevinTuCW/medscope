@@ -24,6 +24,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from medscope import workbench
 from medscope.arbiter import OfflineArbiterClient
 from medscope.config import Settings
 from medscope.graph import GraphDeps, build_graph
@@ -361,6 +362,42 @@ def test_studies_endpoint_lists_the_sample_studies(client):
     assert len(body["studies"]) == 3
     ids = {s["study_id"] for s in body["studies"]}
     assert {"38", "797", "1187"} <= ids
+
+
+def test_studies_endpoint_reports_the_total_alongside_the_page(client):
+    """The page alone cannot distinguish "all the matches" from "the first
+    50 of many" -- see medscope.app.list_studies."""
+    body = client.get("/studies").json()
+    assert body["total"] == 3
+    assert body["limit"] == workbench.DEFAULT_STUDY_LIMIT
+    assert body["corpus"] == str(workbench.SAMPLES_DIR)
+
+
+def test_studies_endpoint_filters_on_q(client):
+    body = client.get("/studies", params={"q": "797"}).json()
+    assert [s["study_id"] for s in body["studies"]] == ["797"]
+    assert body["total"] == 1
+    assert body["query"] == "797"
+
+
+def test_studies_endpoint_honours_limit(client):
+    body = client.get("/studies", params={"limit": 1}).json()
+    assert len(body["studies"]) == 1
+    assert body["total"] == 3
+
+
+def test_studies_endpoint_carries_view_count_and_mesh(client):
+    """`views` is what tells a reader that reader_a got two films to read
+    on this study and one on that one."""
+    body = client.get("/studies").json()
+    for entry in body["studies"]:
+        assert entry["views"] >= 1
+        assert isinstance(entry["mesh"], list)
+
+
+def test_unknown_study_is_a_404_on_both_run_and_stream(client):
+    assert client.post("/workbench/run", json={"study_id": "999999"}).status_code == 404
+    assert client.get("/workbench/stream", params={"study_id": "999999"}).status_code == 404
 
 
 def test_workbench_page_is_served(client):

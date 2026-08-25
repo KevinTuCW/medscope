@@ -48,7 +48,10 @@
     padding: 14px;
   }
   .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  select, button {
+  #study-search { min-width: 220px; }
+  #study-select { max-width: 420px; }
+  #study-count { color: var(--muted); font-size: 12px; }
+  select, button, input[type="search"] {
     background: #1f242c;
     color: var(--text);
     border: 1px solid var(--border);
@@ -129,8 +132,10 @@
   <div class="panel">
     <h1>medscope workbench</h1>
     <div class="controls">
+      <input id="study-search" type="search" placeholder="搜索 study id / 转诊问题 / MeSH…" />
       <select id="study-select"></select>
       <button id="run-btn" type="button">Run study</button>
+      <span id="study-count"></span>
       <span id="status-pill"></span>
     </div>
     <div id="progress-log"></div>
@@ -191,6 +196,8 @@
 
   var el = {
     studySelect: document.getElementById("study-select"),
+    studySearch: document.getElementById("study-search"),
+    studyCount: document.getElementById("study-count"),
     runBtn: document.getElementById("run-btn"),
     statusPill: document.getElementById("status-pill"),
     progressLog: document.getElementById("progress-log"),
@@ -218,18 +225,48 @@
 
   // -- loading the study list --------------------------------------------
 
+  // The fetched OpenI corpus is ~3.8k studies, so the list is a filtered
+  // page from the server rather than everything at once. `seq` guards
+  // against a slow early request landing after a fast later one and
+  // repainting the list with stale results.
+  var studySeq = 0;
+  var studySearchTimer = null;
+
   function loadStudies() {
-    fetch("/studies")
+    var query = el.studySearch.value.trim();
+    var mySeq = ++studySeq;
+
+    fetch("/studies?q=" + encodeURIComponent(query))
       .then(function (r) { return r.json(); })
       .then(function (body) {
+        if (mySeq !== studySeq) return;
+
         el.studySelect.innerHTML = "";
         body.studies.forEach(function (s) {
           var opt = document.createElement("option");
           opt.value = s.study_id;
-          opt.textContent = s.study_id + " — " + (s.indication || "(no indication on file)");
+          var label = s.study_id + " — " + (s.indication || "(no indication on file)");
+          if (s.mesh && s.mesh.length) label += "  [" + s.mesh.join(", ") + "]";
+          if (s.views > 1) label += "  (" + s.views + " views)";
+          opt.textContent = label;
           el.studySelect.appendChild(opt);
         });
+
+        if (body.total === 0) {
+          el.studyCount.textContent = "no match";
+        } else if (body.studies.length < body.total) {
+          el.studyCount.textContent = body.studies.length + " of " + body.total;
+        } else {
+          el.studyCount.textContent = body.total + " studies";
+        }
       });
+  }
+
+  function onStudySearchInput() {
+    // Debounced: every keystroke would otherwise fire a request, and the
+    // useful results only start once a few characters are in.
+    if (studySearchTimer) clearTimeout(studySearchTimer);
+    studySearchTimer = setTimeout(loadStudies, 200);
   }
 
   // -- running a study, streamed -------------------------------------------
@@ -483,6 +520,8 @@
   // -- wiring -----------------------------------------------------------------
 
   el.runBtn.addEventListener("click", runSelectedStudy);
+  el.studySearch.addEventListener("input", onStudySearchInput);
+  el.studySearch.addEventListener("search", loadStudies);
   el.toggleReaderA.addEventListener("change", function () {
     state.showReaderA = el.toggleReaderA.checked;
     drawCanvas();

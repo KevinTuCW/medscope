@@ -43,17 +43,29 @@ def health() -> dict[str, str]:
 
 
 @app.get("/studies")
-def list_studies() -> dict:
-    studies = workbench.list_sample_studies()
+def list_studies(q: str = "", limit: int = workbench.DEFAULT_STUDY_LIMIT) -> dict:
+    """One page of the active corpus, filtered by `q`.
+
+    `total` travels with the page because the fetched OpenI corpus runs to
+    ~3.8k studies: without it the front end cannot tell "these are all the
+    matches" from "these are the first 50 of many".
+    """
+    studies, total = workbench.search_studies(q=q, limit=limit)
     return {
+        "query": q,
+        "total": total,
+        "limit": limit,
+        "corpus": str(workbench.corpus_root()),
         "studies": [
             {
                 "study_id": s.study_id,
                 "indication": s.indication,
                 "impression_text": s.impression_text,
+                "mesh": s.mesh,
+                "views": len(s.image_paths),
             }
             for s in studies
-        ]
+        ],
     }
 
 
@@ -72,7 +84,13 @@ def workbench_run(payload: RunRequest) -> dict:
     try:
         result = workbench.run_sample_study(payload.study_id)
     except KeyError:
-        raise HTTPException(status_code=404, detail=f"no sample study {payload.study_id!r}")
+        raise HTTPException(status_code=404, detail=f"no study {payload.study_id!r}")
+    except RuntimeError as exc:
+        # `build_runtime_deps` refuses to run half-configured rather than
+        # falling back to the offline stand-ins. Surfacing that as a 503
+        # with its own message beats a bare traceback: the fix is always a
+        # missing credential, and the message already says which.
+        raise HTTPException(status_code=503, detail=str(exc))
     return workbench.build_dashboard(result)
 
 
@@ -92,10 +110,17 @@ def list_runs(limit: int = 20) -> dict:
 @app.get("/workbench/stream")
 def workbench_stream(study_id: str) -> StreamingResponse:
     try:
-        study = workbench.find_sample_study(study_id)
+        study = workbench.find_study(study_id)
     except KeyError:
-        raise HTTPException(status_code=404, detail=f"no sample study {study_id!r}")
+        raise HTTPException(status_code=404, detail=f"no study {study_id!r}")
 
     state = workbench.build_initial_state(study)
-    deps = workbench.deps_for_study(study)
+    try:
+        deps = workbench.deps_for_study(study)
+    except RuntimeError as exc:
+        # Built before the stream opens, so a misconfigured VLM fails as an
+        # ordinary HTTP error rather than as an exception thrown midway
+        # through an already-200 event stream, where the browser would only
+        # see the connection stop.
+        raise HTTPException(status_code=503, detail=str(exc))
     return StreamingResponse(workbench.sse_events(state, deps), media_type="text/event-stream")

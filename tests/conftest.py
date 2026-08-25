@@ -37,7 +37,7 @@ def _settings_env_names() -> set[str]:
 
 
 @pytest.fixture(autouse=True)
-def _isolated_settings(monkeypatch):
+def _isolated_settings(monkeypatch, tmp_path_factory):
     # Never let Settings read the real .env file during tests.
     monkeypatch.setitem(Settings.model_config, "env_file", None)
 
@@ -50,4 +50,19 @@ def _isolated_settings(monkeypatch):
     monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
     monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
 
+    # Deleting OPENI_ROOT is not enough to make the fetched corpus invisible:
+    # `Settings.openi_root` then falls back to its default, `data/openi`,
+    # which exists on a machine that has run `scripts/fetch_openi.py` and
+    # does not exist in CI or a fresh clone. A test asserting on the study
+    # list would pass here and fail there -- or worse, quietly assert
+    # against 3.8k studies on one machine and 3 on another. Pointing it at a
+    # path that cannot exist makes every test see what CI sees; the tests
+    # that genuinely want a corpus build one under `tmp_path` and pass it in
+    # explicitly.
+    monkeypatch.setenv("OPENI_ROOT", str(tmp_path_factory.mktemp("no-openi") / "absent"))
+
+    from medscope import workbench
+
+    workbench.reset_corpus_cache()
     yield
+    workbench.reset_corpus_cache()
