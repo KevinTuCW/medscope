@@ -12,6 +12,14 @@ __pycache__/
 build/
 dist/
 
+# The fetched Open-i archive: 1.4 GB, and not ours to redistribute wholesale.
+# The exception is the 95 films the G1 gold set actually names (17 MB, added
+# with `git add -f`, so they stay tracked despite this rule). Without them a
+# fresh checkout -- which is what CI is -- resolves every gold case to zero
+# images, and G1 reports `critical_recall: None`. That is the eval behaving
+# correctly: a case it could not run is not evidence of anything. It also
+# means the hard gate could never go green on CI, so it graded nothing on
+# every merge. Films are cheaper to commit than a gate nobody can run.
 data/openi/
 *.tgz
 outputs/

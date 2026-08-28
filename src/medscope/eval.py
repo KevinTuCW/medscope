@@ -105,12 +105,19 @@ class SuiteResult:
     failures: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     details: dict[str, Any] = field(default_factory=dict)
+    #: Cases the harness could actually execute, when that differs from
+    #: `n_cases`. Only `critical` sets it: its case count comes from
+    #: `critical.json`, which is committed and therefore constant, while
+    #: whether a case can run depends on the Open-i archive being present.
+    #: `None` means the two are the same by construction.
+    n_runnable: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "hard": self.hard,
             "n_cases": self.n_cases,
+            "n_runnable": self.n_runnable,
             "metrics": self.metrics,
             "passed": self.passed,
             "failures": self.failures,
@@ -120,10 +127,18 @@ class SuiteResult:
 
 
 def _apply_min_cases(result: SuiteResult, min_cases: int) -> SuiteResult:
-    if result.n_cases < min_cases:
+    # Count what ran, not what the corpus file lists. The guard exists to
+    # refuse a suite whose corpus has silently shrunk, and a corpus that is
+    # entirely unreadable has shrunk further than one that is merely small
+    # -- but `critical.json` still says 53 either way. Reading n_cases here
+    # let the emptiest possible run sail past a --min-cases 3 written to
+    # catch exactly that.
+    n = result.n_runnable if result.n_runnable is not None else result.n_cases
+    if n < min_cases:
         result.passed = False
+        listed = "" if result.n_runnable is None else f" of {result.n_cases} listed"
         result.failures.append(
-            f"corpus too small: {result.n_cases} case(s) < --min-cases {min_cases} "
+            f"corpus too small: {n} runnable case(s){listed} < --min-cases {min_cases} "
             "-- refusing to treat this suite as a meaningful pass/fail signal"
         )
     return result
@@ -213,6 +228,7 @@ def run_critical_suite(
     unrunnable: list[dict[str, str]] = []
     n_negative_cases = 0
     n_false_positive_cases = 0
+    n_runnable = 0
     false_positive_cases: list[dict[str, Any]] = []
 
     for case in cases:
@@ -224,6 +240,7 @@ def run_critical_suite(
                 unrunnable.append({"study_id": case["study_id"], "label": label, "reason": "no local image"})
             continue
 
+        n_runnable += 1
         read_result = reader.read_study(images)
         alerts = critical_mod.triage(read_result.findings, settings, image_ref=str(images[0]))
         alert_labels = {a.label for a in alerts}
@@ -317,6 +334,7 @@ def run_critical_suite(
         name="critical",
         hard=True,
         n_cases=n_cases,
+        n_runnable=n_runnable,
         metrics={
             "critical_recall": overall_recall,
             "critical_recall_by_label": per_label_recall,

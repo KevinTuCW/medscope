@@ -237,6 +237,36 @@ def test_critical_suite_computes_recall_and_per_label_breakdown(tmp_path):
     assert result.details["n_negative_cases"] == 2
 
 
+def test_min_cases_counts_what_ran_not_what_the_goldset_lists(tmp_path):
+    # How CI stayed red without anyone being told why. `critical.json` is
+    # committed, so n_cases reads 53 on any checkout; whether a case can run
+    # depends on the Open-i archive, which is not committed. On a fresh
+    # checkout every case is unrunnable and `--min-cases 3` -- added to catch
+    # exactly a corpus that shrank -- compared 53 against 3 and said nothing.
+    #
+    # The recall check reddens here regardless (None != 1.0), so asserting
+    # `passed is False` would pass with or without the fix. The failure
+    # *message* is what distinguishes them: only a guard that counts runs can
+    # say the corpus was empty rather than that recall came out wrong.
+    goldset = _write_critical_goldset(tmp_path, SMALL_CRITICAL_CASES)
+    empty_archive = tmp_path / "no-archive"
+    empty_archive.mkdir()
+
+    result = run_critical_suite(
+        Settings(openi_root=empty_archive),
+        goldset_path=goldset,
+        min_cases=3,
+        reader=_GoldLabelReader(SMALL_CRITICAL_CASES),
+    )
+
+    assert result.n_cases == 5
+    assert result.n_runnable == 0
+    assert result.passed is False
+    corpus_failures = [f for f in result.failures if "corpus too small" in f]
+    assert corpus_failures, "an unreadable corpus must be named as such, not left to the recall check"
+    assert "0 runnable case(s) of 5 listed" in corpus_failures[0]
+
+
 def test_critical_suite_reports_coverage_caveat():
     # Uses the REAL gold set -- confirms the honest-accounting requirement
     # (per-label breakdown + coverage caveat) survives against the actual
