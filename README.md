@@ -31,17 +31,12 @@
 输入一张胸片 + 既往病历文本 + 检查申请单，输出一份**每句结论都挂着证据**的结构化报告草稿，外加一条独立的危急值告警通道。
 
 <p align="center">
-  <img src="docs/img/medscope-workbench-top.webp" alt="medscope workbench 首屏：顶部非医疗器械声明与节点链路，红框 CRITICAL FINDING 危急值告警，下方左侧胸片与 CNN 定位标注、右侧 reader_a 与 reader_b 逐标签对照表及 Cohen's kappa" width="900">
+  <a href="docs/img/medscope-workbench.webp"><img src="docs/img/medscope-workbench-top.webp" alt="medscope workbench 首屏：顶部非医疗器械声明与节点链路，红框 CRITICAL FINDING 危急值告警，下方左侧胸片与 CNN 定位标注、右侧 reader_a 与 reader_b 逐标签对照表及 Cohen's kappa" width="900"></a>
 </p>
 
-<details>
-<summary><div align="center"><b>👇 点击展开下半屏</b></div></summary>
-<p align="center">
-  <img src="docs/img/medscope-workbench-rest.webp" alt="medscope workbench 下半屏：因危急值上报而被扣住的报告草稿、逐句挂证据的 FINDINGS 列表、以及记录脱敏 before/after 哈希与预算消耗的审计轨迹" width="900">
-</p>
-</details>
+<p align="center"><a href="docs/img/medscope-workbench.webp"><b>🔍 点击查看完整长截图</b></a></p>
 
-<p align="center"><sub><b>workbench 跑一例危急值</b> —— 红框是抢在报告之前发出的气胸告警，中间是 <code>reader_a</code>（CNN）与 <code>reader_b</code>（VLM）的逐标签对照与 kappa；下半屏是被扣住不发的报告草稿，以及每一步的脱敏 before/after 哈希与预算消耗。</sub></p>
+<p align="center"><sub><b>workbench 跑一例危急值</b> —— 红框是抢在报告之前发出的气胸告警，中间是 <code>reader_a</code>（CNN）与 <code>reader_b</code>（VLM）的逐标签对照与 kappa；往下是被扣住不发的报告草稿，以及每一步的脱敏 before/after 哈希与预算消耗。</sub></p>
 
 **这个仓库最值钱的部分不是那些绿灯，是 [🔍 诚实的局限](#-诚实的局限)。** `make eval` 现在是 **PASS**，G1 危急值召回 27/27。这盏绿灯只值它背后那一句话：**召回从 22/27 升到 27/27 的同时，误报率一动没动**（两次都是 21/26 = 0.808）。改的是系统去看哪些像素——读全一份研究的每一张片、不再把肺尖和肋膈角裁掉——而不是「多低才算报警」。气胸 AUC 仍然只有 0.659，这个数必须和绿灯一起读，否则它就是又一盏焊死的绿灯。详见 [G1 是怎么变绿的](#g1-是怎么变绿的以及这盏绿灯不代表什么)。
 
