@@ -30,11 +30,11 @@
 
 输入一张胸片 + 既往病历文本 + 检查申请单，输出一份**每句结论都挂着证据**的结构化报告草稿，外加一条独立的危急值告警通道。
 
-<p align="center">
-  <a href="docs/img/medscope-workbench.webp"><img src="docs/img/medscope-workbench-top.webp" alt="medscope workbench 首屏：顶部非医疗器械声明与节点链路，红框 CRITICAL FINDING 危急值告警，下方左侧胸片与 CNN 定位标注、右侧 reader_a 与 reader_b 逐标签对照表及 Cohen's kappa" width="900"></a>
-</p>
-
-<p align="center"><a href="docs/img/medscope-workbench.webp"><b>🔍 点击查看完整长截图</b></a></p>
+<details>
+<summary><div align="center"><b>👇 点击图片可展开／收起完整长截图</b></div>
+<img src="docs/img/medscope-workbench-top.webp" alt="medscope workbench 首屏：顶部非医疗器械声明与节点链路，红框 CRITICAL FINDING 危急值告警，下方左侧胸片与 CNN 定位标注、右侧 reader_a 与 reader_b 逐标签对照表及 Cohen's kappa" width="900"></summary>
+<img src="docs/img/medscope-workbench-rest.webp" alt="medscope workbench 续图：因危急值上报而被扣住的报告草稿、逐句挂证据的 FINDINGS 列表、以及记录脱敏 before/after 哈希与预算消耗的审计轨迹" width="900">
+</details>
 
 <p align="center"><sub><b>workbench 跑一例危急值</b> —— 红框是抢在报告之前发出的气胸告警，中间是 <code>reader_a</code>（CNN）与 <code>reader_b</code>（VLM）的逐标签对照与 kappa；往下是被扣住不发的报告草稿，以及每一步的脱敏 before/after 哈希与预算消耗。</sub></p>
 
